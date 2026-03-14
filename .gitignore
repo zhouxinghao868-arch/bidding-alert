@@ -1,0 +1,5 @@
+*.md
+.openclaw/
+pushed_bids.json
+run_bidding.sh
+skills/
