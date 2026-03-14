@@ -152,11 +152,10 @@ class BiddingScraper:
         return company[:6] if len(company) > 6 else company
     
     def _check_keywords(self, title: str, company: str) -> List[str]:
-        """检查标题和公司名是否包含关键词"""
+        """检查标题是否包含关键词"""
         matched = []
-        text = title + " " + company
         for keyword in KEYWORDS:
-            if keyword in text:
+            if keyword in title:
                 matched.append(keyword)
         return matched
     
