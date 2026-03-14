@@ -263,6 +263,7 @@ class BiddingScraper:
                         "url": detail_url,
                         "company": company,
                         "type": original_type,  # 使用原始公告类型
+                        "publish_time": pub_time,  # 添加发布时间
                         "keywords": matched_keywords,
                     }
                     results.append(bid_info)
@@ -332,7 +333,8 @@ class FeishuPusher:
             part = f"\n【{company}-{bid_type}-{count}】\n"
 
             for bid in bid_list:
-                part += f"\n标题：{bid['title']}\n"
+                part += f"\n日期：{bid['publish_time']}\n"
+                part += f"标题：{bid['title']}\n"
                 part += f"链接：{bid['url']}\n"
 
             content_parts.append(part)
