@@ -25,6 +25,20 @@ HEADERS = {
     "Origin": "https://caigou.chinatelecom.com.cn"
 }
 
+# docTypeCode → type 映射（详情页URL必须参数）
+DOC_TYPE_MAP = {
+    "TenderAnnouncement": "1",
+    "PurchaseAnnounceBasic": "2",
+    "PurchaseAnnounc": "2",
+    "CompareSelect": "3",
+    "NegotiationSelect": "5",
+    "Prequalfication": "6",
+    "ResultAnnounc": "7",
+    "TerminationAnnounc": "15",
+    "AuctionAnnounce": "19",
+    "SingleSource": "2",
+}
+
 def fetch_page(page_num, page_size=20):
     """获取一页数据，带重试"""
     payload = {"pageNum": page_num, "pageSize": page_size}
@@ -110,7 +124,7 @@ def fetch_telecom():
                 "type": doc_type,
                 "company": "中国电信",
                 "title": title,
-                "url": f"{BASE_URL}/DeclareDetails?id={rid}&docTypeCode={record.get('docTypeCode','')}&securityViewCode={record.get('securityViewCode','')}",
+                "url": f"{BASE_URL}/DeclareDetails?id={rid}&type={DOC_TYPE_MAP.get(record.get('docTypeCode',''), '7')}&docTypeCode={record.get('docTypeCode','')}&securityViewCode={record.get('securityViewCode','')}",
                 "date": create_date
             })
         
