@@ -11,7 +11,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    if: true  # 已启动
+    if: false  # 已禁用（使用整合版 combined-bidding-monitor.yml）
     
     steps:
     - uses: actions/checkout@v4
