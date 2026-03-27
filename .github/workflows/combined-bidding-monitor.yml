@@ -2,11 +2,11 @@ name: 运营商招标信息整合监控
 
 # 状态: 已启动 (2026-03-27)
 # 关键词: 数智化、数据、算力、战略
-# 策略: 分别抓取 + 整合推送
+# 策略: 分别抓取 + 整合推送（移动/联通/电信）
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小时运行一次
+    - cron: '0 1-14 * * *'  # UTC 1-14点 = 北京时间 9-22点，每小时运行
   workflow_dispatch:
 
 jobs:
@@ -14,11 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai
-    env:
-      TZ: Asia/Shanghai
     
     steps:
     - uses: actions/checkout@v4
+    
+    - name: 恢复去重记录
+      uses: actions/cache@v4
+      with:
+        path: pushed_bids_combined.json
+        key: pushed-bids-combined-${{ github.run_id }}
+        restore-keys: |
+          pushed-bids-combined-
     
     - name: 设置Python环境
       uses: actions/setup-python@v5
@@ -31,8 +37,6 @@ jobs:
         playwright install chromium
     
     - name: 抓取移动招标信息
-      env:
-        FETCH_HOURS: ${{ secrets.FETCH_HOURS || '48' }}
       run: python fetch_cmcc.py
       continue-on-error: true
     
@@ -48,11 +52,3 @@ jobs:
       env:
         FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
       run: python push_combined.py
-    
-    - name: 缓存推送记录
-      uses: actions/cache@v4
-      with:
-        path: pushed_bids_combined.json
-        key: pushed-bids-combined-${{ github.run_id }}
-        restore-keys: |
-          pushed-bids-combined-
