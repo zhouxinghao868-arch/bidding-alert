@@ -40,6 +40,10 @@ jobs:
       run: python fetch_unicom.py
       continue-on-error: true
     
+    - name: 抓取电信招标信息
+      run: python fetch_telecom.py
+      continue-on-error: true
+    
     - name: 整合推送到飞书
       env:
         FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}

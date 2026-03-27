@@ -64,9 +64,10 @@ def mark_bid_pushed(title: str, url: str, records: Dict):
 
 
 def load_bids():
-    """加载两个抓取结果文件"""
+    """加载三个抓取结果文件"""
     cmcc_bids = []
     unicom_bids = []
+    telecom_bids = []
     
     try:
         with open("cmcc_bids.json", 'r', encoding='utf-8') as f:
@@ -80,10 +81,16 @@ def load_bids():
     except:
         print("⚠️ 未找到联通招标数据")
     
-    return cmcc_bids, unicom_bids
+    try:
+        with open("telecom_bids.json", 'r', encoding='utf-8') as f:
+            telecom_bids = json.load(f)
+    except:
+        print("⚠️ 未找到电信招标数据")
+    
+    return cmcc_bids, unicom_bids, telecom_bids
 
 
-def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> bool:
+def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], telecom_bids: List[Dict]) -> bool:
     """发送整合消息到飞书"""
     
     # 去重过滤
@@ -91,8 +98,9 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
     
     cmcc_new = [b for b in cmcc_bids if not is_bid_pushed(b["title"], b["url"], records)]
     unicom_new = [b for b in unicom_bids if not is_bid_pushed(b["title"], b["url"], records)]
+    telecom_new = [b for b in telecom_bids if not is_bid_pushed(b["title"], b["url"], records)]
     
-    total = len(cmcc_new) + len(unicom_new)
+    total = len(cmcc_new) + len(unicom_new) + len(telecom_new)
     
     if total == 0:
         print("\n没有新消息需要推送")
@@ -102,11 +110,11 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
         "📢 运营商招标信息汇总",
         f"📅 {now_bjt().strftime('%Y-%m-%d %H:%M')}",
         f"📊 共找到 {total} 条新公告",
-        f"   中国移动: {len(cmcc_new)}条 | 中国联通: {len(unicom_new)}条"
+        f"   中国移动: {len(cmcc_new)}条 | 中国联通: {len(unicom_new)}条 | 中国电信: {len(telecom_new)}条"
     ]
     
     # 类型统计
-    all_bids = cmcc_new + unicom_new
+    all_bids = cmcc_new + unicom_new + telecom_new
     type_stats = {}
     for bid in all_bids:
         key = f"{bid['platform']}-{bid['type']}"
@@ -145,8 +153,22 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
             lines.append(f"链接：{bid['url']}")
             lines.append("")
     
+    # 中国电信部分
+    if telecom_new:
+        lines.append("=" * 40)
+        lines.append("📞 中国电信招标信息")
+        lines.append("=" * 40)
+        lines.append("")
+        
+        for i, bid in enumerate(telecom_new, 1):
+            lines.append(f"【{bid['province']}-{bid['type']}-{i}】")
+            lines.append(f"日期：{bid['date']}")
+            lines.append(f"标题：{bid['title']}")
+            lines.append(f"链接：{bid['url']}")
+            lines.append("")
+    
     lines.append("=" * 40)
-    lines.append(f"数据来源: 中国移动采购与招标网 | 中国联通采购与招标网")
+    lines.append(f"数据来源: 中国移动采购与招标网 | 中国联通采购与招标网 | 中国电信阳光采购网")
     lines.append(f"关键词: {' | '.join(KEYWORDS)} | 更新时间: {now_bjt().strftime('%H:%M')}")
     
     message = "\n".join(lines)
@@ -167,7 +189,7 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
         if result.get("code") == 0:
             print(f"\n✅ 成功推送 {total} 条消息到飞书")
             # 更新推送记录
-            for bid in cmcc_new + unicom_new:
+            for bid in cmcc_new + unicom_new + telecom_new:
                 mark_bid_pushed(bid["title"], bid["url"], records)
             save_pushed_records(records)
             return True
@@ -182,12 +204,13 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
 def main():
     print(f"=== 整合推送开始 {now_bjt().strftime('%Y-%m-%d %H:%M:%S')} ===")
     
-    cmcc_bids, unicom_bids = load_bids()
+    cmcc_bids, unicom_bids, telecom_bids = load_bids()
     print(f"\n加载数据:")
     print(f"  移动: {len(cmcc_bids)} 条")
     print(f"  联通: {len(unicom_bids)} 条")
+    print(f"  电信: {len(telecom_bids)} 条")
     
-    send_combined_message(cmcc_bids, unicom_bids)
+    send_combined_message(cmcc_bids, unicom_bids, telecom_bids)
     
     print(f"\n=== 整合推送完成 {now_bjt().strftime('%Y-%m-%d %H:%M:%S')} ===")
 
