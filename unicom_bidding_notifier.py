@@ -21,9 +21,9 @@ FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK_UNICOM", "https://open.feishu.cn/open
 FETCH_DAYS = int(os.getenv("FETCH_DAYS", "1"))  # 默认抓取今天的公告
 PUSHED_RECORDS_FILE = "pushed_bids_unicom.json"
 
-# 关键词列表（可根据需要配置）
+# 关键词列表（与移动招标保持一致）
 KEYWORDS = [
-    "算力", "数据", "战略", "云", "网络", "系统", "软件", "硬件", "集成"
+    "数智化", "数据", "算力", "战略"
 ]
 
 
@@ -282,60 +282,74 @@ class FeishuPusher:
     def __init__(self, webhook: str):
         self.webhook = webhook
     
+    def _extract_province(self, region: str) -> str:
+        """从地区信息提取省份简称"""
+        if not region:
+            return "未知"
+        
+        # 省份映射表
+        province_map = {
+            "北京": "北京", "天津": "天津", "河北": "河北", "山西": "山西", "内蒙古": "内蒙古",
+            "辽宁": "辽宁", "吉林": "吉林", "黑龙江": "黑龙江",
+            "上海": "上海", "江苏": "江苏", "浙江": "浙江", "安徽": "安徽", "福建": "福建",
+            "江西": "江西", "山东": "山东",
+            "河南": "河南", "湖北": "湖北", "湖南": "湖南", "广东": "广东", "广西": "广西",
+            "海南": "海南",
+            "重庆": "重庆", "四川": "四川", "贵州": "贵州", "云南": "云南", "西藏": "西藏",
+            "陕西": "陕西", "甘肃": "甘肃", "青海": "青海", "宁夏": "宁夏", "新疆": "新疆"
+        }
+        
+        for province, short_name in province_map.items():
+            if province in region:
+                return short_name
+        
+        return "全国"
+    
     def send_message(self, bids: List[Dict]) -> bool:
-        """发送招标信息到飞书（优化格式）"""
+        """发送招标信息到飞书（统一格式：【省份-类型-序号】）"""
         if not bids:
             print("\n没有新消息需要推送")
             return True
         
-        # 按公告类型分组
-        bids_by_type = {}
+        # 统计信息
+        type_count = {}
         for bid in bids:
             bid_type = bid.get("type", "其他")
-            if bid_type not in bids_by_type:
-                bids_by_type[bid_type] = []
-            bids_by_type[bid_type].append(bid)
+            type_count[bid_type] = type_count.get(bid_type, 0) + 1
         
         # 构建消息内容
         lines = [
             "📢 中国联通招标信息",
             f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-            f"📊 今日新增 {len(bids)} 条公告\n"
+            f"📊 共找到 {len(bids)} 条匹配公告"
         ]
         
-        # 统计信息
+        # 类型统计
         type_order = ["采购公告", "采购结果", "采购计划", "采购准备", "其他"]
+        type_stats = []
         for bid_type in type_order:
-            if bid_type in bids_by_type:
-                count = len(bids_by_type[bid_type])
-                lines.append(f"{bid_type}: {count}条")
+            if bid_type in type_count:
+                type_stats.append(f"{bid_type}: {type_count[bid_type]}条")
+        if type_stats:
+            lines.append(f"📋 {' | '.join(type_stats)}")
         lines.append("")
         
-        # 详细列表（分组显示）
-        for bid_type in type_order:
-            if bid_type not in bids_by_type:
-                continue
+        # 详细列表（按【省份-类型-序号】格式）
+        counter = 1
+        for bid in bids:
+            region = bid.get('region', '')
+            province = self._extract_province(region)
+            bid_type = bid.get("type", "其他")
+            title = bid['title']
+            url = bid['url']
+            pub_date = bid.get('date', datetime.now().strftime('%Y-%m-%d'))
             
-            lines.append(f"\n{'='*40}")
-            lines.append(f"【{bid_type}】")
-            lines.append('='*40)
-            
-            for i, bid in enumerate(bids_by_type[bid_type], 1):
-                title = bid['title']
-                # 截断标题
-                if len(title) > 45:
-                    title = title[:42] + "..."
-                
-                region = bid.get('region', '')
-                company = bid.get('company', '')
-                
-                lines.append(f"\n{i}. {title}")
-                if region:
-                    lines.append(f"   📍 {region}")
-                if company:
-                    company_short = company[:20] + "..." if len(company) > 20 else company
-                    lines.append(f"   🏢 {company_short}")
-                lines.append(f"   🔗 {bid['url']}")
+            lines.append(f"【{province}-{bid_type}-{counter}】")
+            lines.append(f"日期：{pub_date}")
+            lines.append(f"标题：{title}")
+            lines.append(f"链接：{url}")
+            lines.append("")
+            counter += 1
         
         lines.append(f"\n{'='*40}")
         lines.append("数据来源: 中国联通采购与招标网")
