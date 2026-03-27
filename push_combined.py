@@ -7,10 +7,16 @@
 import json
 import os
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List
 
 import requests
+
+# 北京时间
+BJT = timezone(timedelta(hours=8))
+
+def now_bjt():
+    return datetime.now(BJT)
 
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK", "https://open.feishu.cn/open-apis/bot/v2/hook/3f57d6e3-20d7-4511-bb85-695352fbd651")
 PUSHED_RECORDS_FILE = "pushed_bids_combined.json"
@@ -94,7 +100,7 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
     
     lines = [
         "📢 运营商招标信息汇总",
-        f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"📅 {now_bjt().strftime('%Y-%m-%d %H:%M')}",
         f"📊 共找到 {total} 条新公告",
         f"   中国移动: {len(cmcc_new)}条 | 中国联通: {len(unicom_new)}条"
     ]
@@ -141,7 +147,7 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
     
     lines.append("=" * 40)
     lines.append(f"数据来源: 中国移动采购与招标网 | 中国联通采购与招标网")
-    lines.append(f"关键词: {' | '.join(KEYWORDS)} | 更新时间: {datetime.now().strftime('%H:%M')}")
+    lines.append(f"关键词: {' | '.join(KEYWORDS)} | 更新时间: {now_bjt().strftime('%H:%M')}")
     
     message = "\n".join(lines)
     
@@ -174,7 +180,7 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict]) -> boo
 
 
 def main():
-    print(f"=== 整合推送开始 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(f"=== 整合推送开始 {now_bjt().strftime('%Y-%m-%d %H:%M:%S')} ===")
     
     cmcc_bids, unicom_bids = load_bids()
     print(f"\n加载数据:")
@@ -183,7 +189,7 @@ def main():
     
     send_combined_message(cmcc_bids, unicom_bids)
     
-    print(f"\n=== 整合推送完成 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(f"\n=== 整合推送完成 {now_bjt().strftime('%Y-%m-%d %H:%M:%S')} ===")
 
 
 if __name__ == "__main__":

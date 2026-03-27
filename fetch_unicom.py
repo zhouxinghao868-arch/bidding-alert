@@ -7,17 +7,18 @@
 import json
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "unicom_bids.json"
 KEYWORDS = ["数智化", "数智", "数据", "算力", "战略"]
-TODAY = datetime.now().strftime("%Y-%m-%d")
+BJT = timezone(timedelta(hours=8))
+TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
 def fetch_unicom():
-    print(f"=== 抓取联通招标 {datetime.now().strftime('%H:%M:%S')} ===")
+    print(f"=== 抓取联通招标 {datetime.now(BJT).strftime('%H:%M:%S')} ===")
     print(f"限定日期: {TODAY}")
     print(f"关键词: {' | '.join(KEYWORDS)}")
     
