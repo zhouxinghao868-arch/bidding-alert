@@ -150,7 +150,10 @@ class CombinedBiddingScraper:
         
         try:
             page.goto(url, wait_until="networkidle", timeout=60000)
-            time.sleep(3)
+            time.sleep(5)  # 增加等待时间确保页面加载完成
+            
+            # 等待表格加载
+            page.wait_for_selector("tr.ant-table-row", timeout=10000)
             
             # 获取所有行
             rows = page.locator("tr.ant-table-row").all()
@@ -260,55 +263,118 @@ class CombinedBiddingScraper:
             page.goto("https://www.chinaunicombidding.cn", wait_until="networkidle", timeout=60000)
             time.sleep(5)
             
-            # 获取今天和昨天的日期范围
-            today = datetime.now()
-            yesterday = today - timedelta(days=1)
-            date_from = yesterday.strftime("%Y-%m-%d")
-            date_to = today.strftime("%Y-%m-%d")
-            
-            # 设置日期筛选
-            page.locator("input[placeholder='开始日期']").fill(date_from)
-            page.locator("input[placeholder='结束日期']").fill(date_to)
-            page.locator("button:has-text('查询')").click()
-            time.sleep(3)
+            # 等待页面内容加载
+            page.wait_for_selector("h5", timeout=10000)
             
             page_num = 1
-            while True:
+            max_pages = 5  # 最多抓取5页
+            
+            while page_num <= max_pages:
                 print(f"\n  正在处理第 {page_num} 页...")
+                time.sleep(2)
                 
-                rows = page.locator(".ant-table-tbody tr").all()
-                for row in rows:
+                # 使用h5标签查找标题（和原来能工作的版本一致）
+                title_elements = page.query_selector_all("h5")
+                print(f"    本页找到 {len(title_elements)} 条招标信息")
+                
+                for title_elem in title_elements:
                     try:
-                        cells = row.locator("td").all()
-                        if len(cells) < 4:
+                        title = title_elem.inner_text().strip()
+                        if not title:
                             continue
-                        
-                        title = cells[0].inner_text().strip()
-                        bid_type = cells[1].inner_text().strip()
-                        region = cells[2].inner_text().strip()
-                        date_str = cells[3].inner_text().strip()
-                        
-                        # 点击标题获取详情URL
-                        title_link = cells[0].locator("a").first
-                        if not title_link:
-                            continue
-                        
-                        href = title_link.get_attribute("href")
-                        detail_url = f"https://www.chinaunicombidding.cn{href}" if href and href.startswith("/") else href
                         
                         # 关键词匹配
-                        if not self._match_keywords(title) and not self._match_keywords(region):
+                        if not self._match_keywords(title):
                             continue
+                        
+                        # 获取父元素信息
+                        parent = title_elem.evaluate("el => el.closest('.card, .list-item, .ant-list-item, [class*=\\"item\\"], [class*=\\"card\\"]')")
+                        parent_text = ""
+                        if parent:
+                            parent_text = parent.inner_text() if hasattr(parent, 'inner_text') else ""
+                        
+                        # 提取公告类型
+                        bid_type = "其他"
+                        for t in ["采购公告", "采购结果", "采购计划", "采购准备"]:
+                            if t in parent_text or t in title:
+                                bid_type = t
+                                break
+                        
+                        # 提取地区/公司
+                        company = ""
+                        if "招标人：" in parent_text:
+                            parts = parent_text.split("招标人：")
+                            if len(parts) > 1:
+                                company = parts[1].split("\n")[0].strip()
+                        
+                        region = self._extract_province_from_region(company) if company else "全国"
+                        
+                        # 获取详情URL - 尝试点击标题
+                        detail_url = ""
+                        try:
+                            # 尝试找到标题的链接
+                            link_elem = title_elem.evaluate("el => el.closest('a')")
+                            if link_elem:
+                                href = link_elem.get_attribute("href")
+                                if href:
+                                    detail_url = f"https://www.chinaunicombidding.cn{href}" if href.startswith("/") else href
+                            
+                            # 如果没有找到链接，尝试点击
+                            if not detail_url:
+                                title_elem.click()
+                                time.sleep(1)
+                                if len(self.context.pages) > 1:
+                                    detail_page = self.context.pages[-1]
+                                    detail_url = detail_page.url
+                                    detail_page.close()
+                                    time.sleep(0.5)
+                        except:
+                            detail_url = "https://www.chinaunicombidding.cn/bidInformation"
                         
                         # 去重检查
                         if self.is_bid_pushed(title, detail_url):
+                            print(f"      已推送过，跳过")
                             continue
-                        
-                        # 提取省份
-                        province = self._extract_province_from_region(region)
                         
                         bids.append({
                             "platform": "联通",
+                            "province": region,
+                            "type": bid_type,
+                            "company": company or "中国联通",
+                            "title": title,
+                            "url": detail_url,
+                            "date": datetime.now().strftime("%Y-%m-%d")
+                        })
+                        print(f"    ✓ 发现匹配: {title[:40]}...")
+                        
+                    except Exception as e:
+                        continue
+                
+                # 检查是否有下一页
+                try:
+                    next_btn = page.locator(".ant-pagination-next").first
+                    if next_btn:
+                        is_disabled = next_btn.get_attribute("aria-disabled")
+                        if is_disabled != "true":
+                            next_btn.click()
+                            time.sleep(3)
+                            page_num += 1
+                        else:
+                            print(f"\n  已是最后一页，共抓取 {len(bids)} 条")
+                            break
+                    else:
+                        break
+                except Exception as e:
+                    print(f"\n  翻页结束: {e}，共抓取 {len(bids)} 条")
+                    break
+                    
+        except Exception as e:
+            print(f"  抓取失败: {e}")
+        finally:
+            page.close()
+        
+        self.unicom_bids = bids
+        return bids
                             "province": province,
                             "type": bid_type,
                             "company": region,
