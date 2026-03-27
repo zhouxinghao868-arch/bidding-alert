@@ -215,29 +215,45 @@ def fetch_cmcc():
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     time.sleep(1)
                     
-                    # 查找下一页按钮
-                    next_btn = page.locator(".ant-pagination-next").first
-                    if next_btn:
-                        # 检查是否有 disabled 类
-                        class_attr = next_btn.get_attribute("class") or ""
-                        if "disabled" in class_attr or "ant-pagination-disabled" in class_attr:
-                            print(f"     已到最后一页")
-                            break
-                        
-                        # 点击下一页
-                        next_btn.click()
+                    # 尝试找到并点击下一页按钮
+                    clicked = False
+                    
+                    # 方法1: 使用 ant-pagination-next
+                    try:
+                        next_btn = page.locator(".ant-pagination-next").first
+                        if next_btn.count() > 0:
+                            next_btn.click(timeout=5000)
+                            clicked = True
+                    except:
+                        pass
+                    
+                    # 方法2: 使用 li 包含下一页
+                    if not clicked:
+                        try:
+                            next_btn = page.locator("li.ant-pagination-next").first
+                            if next_btn.count() > 0:
+                                next_btn.click(timeout=5000)
+                                clicked = True
+                        except:
+                            pass
+                    
+                    # 方法3: 使用 page number + 1
+                    if not clicked:
+                        try:
+                            next_page_num = page_num + 1
+                            page_btn = page.locator(f"li.ant-pagination-item[title='{next_page_num}']").first
+                            if page_btn.count() > 0:
+                                page_btn.click(timeout=5000)
+                                clicked = True
+                        except:
+                            pass
+                    
+                    if clicked:
                         time.sleep(3)
                         page_num += 1
                     else:
-                        # 尝试其他分页按钮选择器
-                        next_btn = page.locator("button:has-text('下一页')").first
-                        if next_btn:
-                            next_btn.click()
-                            time.sleep(3)
-                            page_num += 1
-                        else:
-                            print(f"     无翻页按钮，结束")
-                            break
+                        print(f"     已到最后一页或无下一页按钮")
+                        break
                         
                 except Exception as e:
                     print(f"     翻页结束: {str(e)[:50]}")
