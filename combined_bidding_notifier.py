@@ -38,14 +38,6 @@ CMCC_BID_TYPE_MAP = {
     "PREQUALIFICATION": "资格预审公告",
 }
 
-# 联通公告类型映射
-UNICOM_BID_TYPE_MAP = {
-    "采购公告": "采购公告",
-    "采购结果": "采购结果",
-    "采购计划": "采购计划",
-    "采购准备": "采购准备",
-}
-
 
 class CombinedBiddingScraper:
     """整合招标信息抓取类（移动+联通）"""
@@ -132,6 +124,25 @@ class CombinedBiddingScraper:
         except:
             return None
     
+    def _extract_province(self, text: str) -> str:
+        """从文本提取省份"""
+        if not text:
+            return "全国"
+        province_map = {
+            "北京": "北京", "天津": "天津", "河北": "河北", "山西": "山西", "内蒙古": "内蒙古",
+            "辽宁": "辽宁", "吉林": "吉林", "黑龙江": "黑龙江",
+            "上海": "上海", "江苏": "江苏", "浙江": "浙江", "安徽": "安徽", "福建": "福建",
+            "江西": "江西", "山东": "山东",
+            "河南": "河南", "湖北": "湖北", "湖南": "湖南", "广东": "广东", "广西": "广西",
+            "海南": "海南",
+            "重庆": "重庆", "四川": "四川", "贵州": "贵州", "云南": "云南", "西藏": "西藏",
+            "陕西": "陕西", "甘肃": "甘肃", "青海": "青海", "宁夏": "宁夏", "新疆": "新疆"
+        }
+        for province, short_name in province_map.items():
+            if province in text:
+                return short_name
+        return "全国"
+    
     # ============ 移动招标抓取 ============
     def fetch_cmcc_bids(self) -> List[Dict]:
         """抓取移动招标信息"""
@@ -150,12 +161,11 @@ class CombinedBiddingScraper:
         
         try:
             page.goto(url, wait_until="networkidle", timeout=60000)
-            time.sleep(5)  # 增加等待时间确保页面加载完成
+            time.sleep(5)
             
             # 等待表格加载
             page.wait_for_selector("tr.ant-table-row", timeout=10000)
             
-            # 获取所有行
             rows = page.locator("tr.ant-table-row").all()
             print(f"  找到 {len(rows)} 条记录")
             
@@ -183,18 +193,18 @@ class CombinedBiddingScraper:
                     else:
                         continue
                     
-                    # 检查关键词匹配
+                    # 关键词匹配
                     if not self._match_keywords(title) and not self._match_keywords(company):
                         continue
                     
-                    # 检查时间
+                    # 时间检查
                     bid_date = self._parse_date(date_str)
                     if bid_date:
                         cutoff = datetime.now() - timedelta(hours=FETCH_HOURS)
                         if bid_date < cutoff:
                             continue
                     
-                    # 检查去重
+                    # 去重检查
                     if self.is_bid_pushed(title, detail_url):
                         continue
                     
@@ -205,8 +215,7 @@ class CombinedBiddingScraper:
                             bid_type_cn = value
                             break
                     
-                    # 提取省份
-                    province = self._extract_province_from_company(company)
+                    province = self._extract_province(company)
                     
                     results.append({
                         "platform": "移动",
@@ -229,28 +238,6 @@ class CombinedBiddingScraper:
         
         return results
     
-    def _extract_province_from_company(self, company: str) -> str:
-        """从公司名称提取省份"""
-        if not company:
-            return "全国"
-        
-        province_map = {
-            "北京": "北京", "天津": "天津", "河北": "河北", "山西": "山西", "内蒙古": "内蒙古",
-            "辽宁": "辽宁", "吉林": "吉林", "黑龙江": "黑龙江",
-            "上海": "上海", "江苏": "江苏", "浙江": "浙江", "安徽": "安徽", "福建": "福建",
-            "江西": "江西", "山东": "山东",
-            "河南": "河南", "湖北": "湖北", "湖南": "湖南", "广东": "广东", "广西": "广西",
-            "海南": "海南",
-            "重庆": "重庆", "四川": "四川", "贵州": "贵州", "云南": "云南", "西藏": "西藏",
-            "陕西": "陕西", "甘肃": "甘肃", "青海": "青海", "宁夏": "宁夏", "新疆": "新疆"
-        }
-        
-        for province, short_name in province_map.items():
-            if province in company:
-                return short_name
-        
-        return "全国"
-    
     # ============ 联通招标抓取 ============
     def fetch_unicom_bids(self) -> List[Dict]:
         """抓取联通招标信息"""
@@ -259,21 +246,18 @@ class CombinedBiddingScraper:
         page = self.context.new_page()
         
         try:
-            # 访问联通招标网站
             page.goto("https://www.chinaunicombidding.cn", wait_until="networkidle", timeout=60000)
             time.sleep(5)
             
-            # 等待页面内容加载
             page.wait_for_selector("h5", timeout=10000)
             
             page_num = 1
-            max_pages = 5  # 最多抓取5页
+            max_pages = 5
             
             while page_num <= max_pages:
                 print(f"\n  正在处理第 {page_num} 页...")
                 time.sleep(2)
                 
-                # 使用h5标签查找标题（和原来能工作的版本一致）
                 title_elements = page.query_selector_all("h5")
                 print(f"    本页找到 {len(title_elements)} 条招标信息")
                 
@@ -287,49 +271,23 @@ class CombinedBiddingScraper:
                         if not self._match_keywords(title):
                             continue
                         
-                        # 获取父元素信息
-                        parent = title_elem.evaluate("el => el.closest('.card, .list-item, .ant-list-item, [class*=\\"item\\"], [class*=\\"card\\"]')")
-                        parent_text = ""
-                        if parent:
-                            parent_text = parent.inner_text() if hasattr(parent, 'inner_text') else ""
-                        
                         # 提取公告类型
                         bid_type = "其他"
                         for t in ["采购公告", "采购结果", "采购计划", "采购准备"]:
-                            if t in parent_text or t in title:
+                            if t in title:
                                 bid_type = t
                                 break
                         
-                        # 提取地区/公司
-                        company = ""
-                        if "招标人：" in parent_text:
-                            parts = parent_text.split("招标人：")
-                            if len(parts) > 1:
-                                company = parts[1].split("\n")[0].strip()
-                        
-                        region = self._extract_province_from_region(company) if company else "全国"
-                        
-                        # 获取详情URL - 尝试点击标题
-                        detail_url = ""
+                        # 获取详情URL
+                        detail_url = "https://www.chinaunicombidding.cn/bidInformation"
                         try:
-                            # 尝试找到标题的链接
                             link_elem = title_elem.evaluate("el => el.closest('a')")
                             if link_elem:
                                 href = link_elem.get_attribute("href")
                                 if href:
                                     detail_url = f"https://www.chinaunicombidding.cn{href}" if href.startswith("/") else href
-                            
-                            # 如果没有找到链接，尝试点击
-                            if not detail_url:
-                                title_elem.click()
-                                time.sleep(1)
-                                if len(self.context.pages) > 1:
-                                    detail_page = self.context.pages[-1]
-                                    detail_url = detail_page.url
-                                    detail_page.close()
-                                    time.sleep(0.5)
                         except:
-                            detail_url = "https://www.chinaunicombidding.cn/bidInformation"
+                            pass
                         
                         # 去重检查
                         if self.is_bid_pushed(title, detail_url):
@@ -338,9 +296,9 @@ class CombinedBiddingScraper:
                         
                         bids.append({
                             "platform": "联通",
-                            "province": region,
+                            "province": "全国",
                             "type": bid_type,
-                            "company": company or "中国联通",
+                            "company": "中国联通",
                             "title": title,
                             "url": detail_url,
                             "date": datetime.now().strftime("%Y-%m-%d")
@@ -350,7 +308,7 @@ class CombinedBiddingScraper:
                     except Exception as e:
                         continue
                 
-                # 检查是否有下一页
+                # 翻页
                 try:
                     next_btn = page.locator(".ant-pagination-next").first
                     if next_btn:
@@ -375,59 +333,6 @@ class CombinedBiddingScraper:
         
         self.unicom_bids = bids
         return bids
-                            "province": province,
-                            "type": bid_type,
-                            "company": region,
-                            "title": title,
-                            "url": detail_url,
-                            "date": date_str
-                        })
-                        print(f"  ✓ 发现匹配: {title[:40]}...")
-                        
-                    except Exception as e:
-                        continue
-                
-                # 翻页处理
-                try:
-                    next_btn = page.locator(".ant-pagination-next").first
-                    if next_btn and not next_btn.get_attribute("aria-disabled"):
-                        next_btn.click()
-                        time.sleep(3)
-                        page_num += 1
-                    else:
-                        break
-                except:
-                    break
-                    
-        except Exception as e:
-            print(f"  抓取失败: {e}")
-        finally:
-            page.close()
-        
-        self.unicom_bids = bids
-        return bids
-    
-    def _extract_province_from_region(self, region: str) -> str:
-        """从地区信息提取省份"""
-        if not region:
-            return "未知"
-        
-        province_map = {
-            "北京": "北京", "天津": "天津", "河北": "河北", "山西": "山西", "内蒙古": "内蒙古",
-            "辽宁": "辽宁", "吉林": "吉林", "黑龙江": "黑龙江",
-            "上海": "上海", "江苏": "江苏", "浙江": "浙江", "安徽": "安徽", "福建": "福建",
-            "江西": "江西", "山东": "山东",
-            "河南": "河南", "湖北": "湖北", "湖南": "湖南", "广东": "广东", "广西": "广西",
-            "海南": "海南",
-            "重庆": "重庆", "四川": "四川", "贵州": "贵州", "云南": "云南", "西藏": "西藏",
-            "陕西": "陕西", "甘肃": "甘肃", "青海": "青海", "宁夏": "宁夏", "新疆": "新疆"
-        }
-        
-        for province, short_name in province_map.items():
-            if province in region:
-                return short_name
-        
-        return "全国"
     
     def fetch_all(self) -> List[Dict]:
         """抓取所有招标信息"""
@@ -448,11 +353,9 @@ class FeishuPusher:
             print("\n没有新消息需要推送")
             return True
         
-        # 分离移动和联通
         cmcc_bids = [b for b in bids if b.get("platform") == "移动"]
         unicom_bids = [b for b in bids if b.get("platform") == "联通"]
         
-        # 统计
         lines = [
             "📢 运营商招标信息汇总",
             f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
@@ -460,7 +363,7 @@ class FeishuPusher:
             f"   中国移动: {len(cmcc_bids)}条 | 中国联通: {len(unicom_bids)}条"
         ]
         
-        # 按平台+类型统计
+        # 类型统计
         type_stats = {}
         for bid in bids:
             key = f"{bid['platform']}-{bid['type']}"
@@ -505,7 +408,6 @@ class FeishuPusher:
         
         message = "\n".join(lines)
         
-        # 发送消息
         payload = {
             "msg_type": "text",
             "content": {"text": message}
@@ -539,7 +441,6 @@ def main():
     scraper.init_browser()
     
     try:
-        # 抓取所有招标信息
         bids = scraper.fetch_all()
         
         if not bids:
@@ -550,10 +451,8 @@ def main():
         print(f"  中国移动: {len(scraper.cmcc_bids)}条")
         print(f"  中国联通: {len(scraper.unicom_bids)}条")
         
-        # 推送到飞书
         pusher = FeishuPusher(FEISHU_WEBHOOK)
         if pusher.send_combined_message(bids):
-            # 保存推送记录
             for bid in bids:
                 scraper.mark_bid_pushed(bid["title"], bid["url"])
             scraper._save_pushed_records()
