@@ -168,17 +168,17 @@ class BiddingScraper:
             return True
     
     def fetch_bidding_procurement(self) -> List[Dict]:
-        """抓取招标采购公告页面"""
+        """抓取招标采购公告页面（前三页）"""
         url = "https://b2b.10086.cn/#/biddingProcurementBulletin"
-        return self._fetch_page(url, "bidding")
+        return self._fetch_multiple_pages(url, "bidding", max_pages=3)
     
     def fetch_procurement_services(self) -> List[Dict]:
-        """抓取采购服务页面（意见征求公告）"""
+        """抓取采购服务页面（意见征求公告，前三页）"""
         url = "https://b2b.10086.cn/#/procurementServices"
-        return self._fetch_page(url, "opinion")
+        return self._fetch_multiple_pages(url, "opinion", max_pages=3)
     
-    def _fetch_page(self, url: str, page_type: str) -> List[Dict]:
-        """抓取单个页面的招标信息"""
+    def _fetch_multiple_pages(self, url: str, page_type: str, max_pages: int = 3) -> List[Dict]:
+        """抓取多页招标信息"""
         results = []
         page = self.context.new_page()
         
@@ -187,92 +187,135 @@ class BiddingScraper:
             page.goto(url, wait_until="networkidle", timeout=60000)
             time.sleep(5)  # 等待页面完全加载
             
-            # 等待表格加载 - 使用多种选择器
-            try:
-                page.wait_for_selector(".el-table__body-wrapper table tbody tr", timeout=30000)
-            except:
-                # 尝试其他选择器
+            for current_page in range(1, max_pages + 1):
+                print(f"\n  正在抓取第 {current_page} 页...")
+                
+                # 等待表格加载
                 try:
-                    page.wait_for_selector("table tbody tr", timeout=10000)
+                    page.wait_for_selector(".el-table__body-wrapper table tbody tr", timeout=30000)
                 except:
-                    print("  警告: 表格加载超时，尝试继续...")
-            
-            time.sleep(2)
-            
-            # 获取所有数据行
-            rows = page.query_selector_all(".el-table__body-wrapper table tbody tr")
-            if not rows:
-                # 尝试其他选择器
-                rows = page.query_selector_all("table tbody tr")
-            
-            print(f"  找到 {len(rows)} 条记录")
-            
-            for row in rows[:30]:  # 只处理前30条
-                try:
-                    # 获取所有单元格
-                    cells = row.query_selector_all("td")
-                    if len(cells) < 4:
-                        continue
-                    
-                    # 提取数据
-                    company = cells[0].inner_text().strip()  # 采购需求单位
-                    bid_type_text = cells[1].inner_text().strip()  # 公告类型
-                    title = cells[2].inner_text().strip()  # 标题
-                    pub_time = cells[3].inner_text().strip()  # 发布时间
-                    
-                    # 检查时间范围
-                    if not self._is_within_time_range(pub_time):
-                        continue
-                    
-                    # 检查是否已推送
-                    # 使用标题+时间作为临时标识，后面会更新为真实URL
-                    temp_id = f"{title}_{pub_time}"
-                    
-                    # 检查关键词匹配
-                    matched_keywords = self._check_keywords(title, company)
-                    if not matched_keywords:
-                        continue
-                    
-                    print(f"  发现匹配: {title[:50]}...")
-                    
-                    # 获取详情URL（点击标题）
-                    detail_url = self._get_detail_url(page, title)
-                    if not detail_url:
-                        continue
-                    
-                    # 再次检查URL是否已推送
-                    if detail_url in self.pushed_records:
-                        print(f"  已推送过，跳过")
-                        continue
-                    
-                    # 获取准确的公告类型（只保留需要的6种）
-                    bid_type = self._parse_bid_type_from_url(detail_url)
-                    if not bid_type:
-                        print(f"  跳过: 不在目标公告类型范围内")
-                        continue
-                    
-                    # 使用原始公告类型（从网页表格）
-                    original_type = bid_type_text if bid_type_text else bid_type
-                    
-                    bid_info = {
-                        "title": title,
-                        "url": detail_url,
-                        "company": company,
-                        "type": original_type,  # 使用原始公告类型
-                        "publish_time": pub_time,  # 添加发布时间
-                        "keywords": matched_keywords,
-                    }
-                    results.append(bid_info)
-                    print(f"  ✓ 成功抓取: {title[:50]}...")
-                    
-                except Exception as e:
-                    print(f"  处理行数据失败: {e}")
-                    continue
+                    try:
+                        page.wait_for_selector("table tbody tr", timeout=10000)
+                    except:
+                        print("  警告: 表格加载超时，尝试继续...")
+                
+                time.sleep(2)
+                
+                # 获取当前页数据
+                page_results = self._parse_current_page(page)
+                results.extend(page_results)
+                
+                # 如果不是最后一页，点击下一页
+                if current_page < max_pages:
+                    try:
+                        # 尝试多种方式找到下一页按钮
+                        next_button = None
+                        
+                        # 方式1: 通过 aria-label="下一页" 或包含 "下一页" 文本
+                        next_btn = page.locator("button[aria-label='下一页'], button:has-text('下一页'), .el-pagination .btn-next").first
+                        if next_btn.count() > 0 and next_btn.is_enabled():
+                            next_button = next_btn
+                        
+                        # 方式2: 通过 class 名查找
+                        if not next_button:
+                            next_btn2 = page.locator(".el-pagination button.btn-next, .pagination .next, [class*='next']").first
+                            if next_btn2.count() > 0 and next_btn2.is_enabled():
+                                next_button = next_btn2
+                        
+                        if next_button:
+                            # 检查是否已禁用（最后一页）
+                            is_disabled = next_button.is_disabled() if hasattr(next_button, 'is_disabled') else False
+                            if not is_disabled:
+                                next_button.click()
+                                time.sleep(3)  # 等待页面加载
+                                print(f"  已切换到第 {current_page + 1} 页")
+                            else:
+                                print(f"  已是最后一页，停止抓取")
+                                break
+                        else:
+                            print(f"  未找到下一页按钮，停止抓取")
+                            break
+                            
+                    except Exception as e:
+                        print(f"  翻页失败: {e}，停止抓取")
+                        break
             
         except Exception as e:
             print(f"  抓取页面失败: {e}")
         finally:
             page.close()
+        
+        print(f"\n  共抓取 {len(results)} 条匹配的招标信息")
+        return results
+    
+    def _parse_current_page(self, page) -> List[Dict]:
+        """解析当前页面的招标信息"""
+        results = []
+        
+        # 获取所有数据行
+        rows = page.query_selector_all(".el-table__body-wrapper table tbody tr")
+        if not rows:
+            rows = page.query_selector_all("table tbody tr")
+        
+        print(f"    当前页找到 {len(rows)} 条记录")
+        
+        for row in rows:
+            try:
+                # 获取所有单元格
+                cells = row.query_selector_all("td")
+                if len(cells) < 4:
+                    continue
+                
+                # 提取数据
+                company = cells[0].inner_text().strip()  # 采购需求单位
+                bid_type_text = cells[1].inner_text().strip()  # 公告类型
+                title = cells[2].inner_text().strip()  # 标题
+                pub_time = cells[3].inner_text().strip()  # 发布时间
+                
+                # 检查时间范围
+                if not self._is_within_time_range(pub_time):
+                    continue
+                
+                # 检查关键词匹配
+                matched_keywords = self._check_keywords(title, company)
+                if not matched_keywords:
+                    continue
+                
+                print(f"    发现匹配: {title[:50]}...")
+                
+                # 获取详情URL（点击标题）
+                detail_url = self._get_detail_url(page, title)
+                if not detail_url:
+                    continue
+                
+                # 再次检查URL是否已推送
+                if detail_url in self.pushed_records:
+                    print(f"    已推送过，跳过")
+                    continue
+                
+                # 获取准确的公告类型（只保留需要的6种）
+                bid_type = self._parse_bid_type_from_url(detail_url)
+                if not bid_type:
+                    print(f"    跳过: 不在目标公告类型范围内")
+                    continue
+                
+                # 使用原始公告类型（从网页表格）
+                original_type = bid_type_text if bid_type_text else bid_type
+                
+                bid_info = {
+                    "title": title,
+                    "url": detail_url,
+                    "company": company,
+                    "type": original_type,
+                    "publish_time": pub_time,
+                    "keywords": matched_keywords,
+                }
+                results.append(bid_info)
+                print(f"    ✓ 成功抓取: {title[:50]}...")
+                
+            except Exception as e:
+                print(f"    处理行数据失败: {e}")
+                continue
         
         return results
     
