@@ -208,32 +208,33 @@ class BiddingScraper:
                 # 如果不是最后一页，点击下一页
                 if current_page < max_pages:
                     try:
-                        # 尝试多种方式找到下一页按钮
-                        next_button = None
+                        # 使用更精确的选择器，限定在分页组件内
+                        # 先找到分页组件
+                        pagination = page.locator(".el-pagination").first
                         
-                        # 方式1: 通过 aria-label="下一页" 或包含 "下一页" 文本
-                        next_btn = page.locator("button[aria-label='下一页'], button:has-text('下一页'), .el-pagination .btn-next").first
-                        if next_btn.count() > 0 and next_btn.is_enabled():
-                            next_button = next_btn
-                        
-                        # 方式2: 通过 class 名查找
-                        if not next_button:
-                            next_btn2 = page.locator(".el-pagination button.btn-next, .pagination .next, [class*='next']").first
-                            if next_btn2.count() > 0 and next_btn2.is_enabled():
-                                next_button = next_btn2
-                        
-                        if next_button:
-                            # 检查是否已禁用（最后一页）
-                            is_disabled = next_button.is_disabled() if hasattr(next_button, 'is_disabled') else False
-                            if not is_disabled:
-                                next_button.click()
-                                time.sleep(3)  # 等待页面加载
-                                print(f"  已切换到第 {current_page + 1} 页")
+                        if pagination.count() > 0:
+                            # 在分页组件内查找下一页按钮（更精确的选择器）
+                            next_button = pagination.locator("button.btn-next").first
+                            
+                            if next_button.count() > 0:
+                                # 检查按钮是否禁用（有disabled类）
+                                is_disabled = next_button.is_disabled()
+                                class_attr = next_button.get_attribute("class") or ""
+                                has_disabled_class = "disabled" in class_attr
+                                
+                                if not is_disabled and not has_disabled_class:
+                                    # 使用 JavaScript 点击，避免元素遮挡问题
+                                    next_button.evaluate("el => el.click()")
+                                    time.sleep(3)  # 等待页面加载
+                                    print(f"  已切换到第 {current_page + 1} 页")
+                                else:
+                                    print(f"  已是最后一页，停止抓取")
+                                    break
                             else:
-                                print(f"  已是最后一页，停止抓取")
+                                print(f"  未找到下一页按钮，停止抓取")
                                 break
                         else:
-                            print(f"  未找到下一页按钮，停止抓取")
+                            print(f"  未找到分页组件，停止抓取")
                             break
                             
                     except Exception as e:
