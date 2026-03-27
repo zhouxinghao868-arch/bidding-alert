@@ -7,10 +7,8 @@
 
 import json
 import os
-import re
 import time
-from datetime import datetime, timedelta
-from typing import List
+from datetime import datetime
 from dateutil import parser as date_parser
 
 from playwright.sync_api import sync_playwright
@@ -94,19 +92,20 @@ def fetch_cmcc():
             # 设置日期筛选为今天
             print(f"  设置日期筛选: {TODAY} 至 {TODAY}")
             try:
-                # 找到发布时间输入框
-                date_input = page.locator("input[placeholder*='发布时间']").first
+                # 点击日期输入框
+                date_input = page.locator(".cmcc-date-picker input[placeholder*='时间段']").first
                 if date_input.count() > 0:
-                    # 清空并输入日期范围
                     date_input.click()
-                    time.sleep(0.5)
-                    date_input.fill(f"{TODAY} - {TODAY}")
-                    time.sleep(0.5)
-                    print(f"    ✅ 已设置日期")
+                    time.sleep(1)
                     
-                    # 点击空白处关闭日历
-                    page.mouse.click(100, 100)
-                    time.sleep(0.5)
+                    # 点击今天的日期（27号）
+                    today_cell = page.locator(f".cmcc-date-picker-cells-cell:has-text('{int(TODAY.split('-')[2])}')").first
+                    if today_cell.count() > 0:
+                        today_cell.click()
+                        time.sleep(0.5)
+                        today_cell.click()  # 再点击一次选择结束日期
+                        time.sleep(0.5)
+                        print(f"    ✅ 已选择今天")
             except Exception as e:
                 print(f"    ⚠️ 设置日期失败: {e}")
             
@@ -116,21 +115,17 @@ def fetch_cmcc():
                 search_btn = page.locator("button:has-text('查询')").first
                 if search_btn.count() > 0:
                     search_btn.click()
-                    time.sleep(5)  # 等待查询结果加载
+                    time.sleep(5)
                     print("    ✅ 已点击查询")
-                else:
-                    print("    ⚠️ 未找到查询按钮")
             except Exception as e:
                 print(f"    ⚠️ 点击查询失败: {e}")
             
             # 开始翻页抓取
             page_num = 1
-            max_pages = 10
+            max_pages = 20
             
             while page_num <= max_pages:
                 print(f"\n  📄 正在处理第 {page_num} 页...")
-                
-                # 等待表格加载
                 time.sleep(2)
                 
                 # 获取当前页的所有行
@@ -209,40 +204,40 @@ def fetch_cmcc():
                 
                 # 尝试翻到下一页
                 try:
-                    # 滚动到底部，确保分页按钮可见
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     time.sleep(2)
                     
-                    # 找下一页按钮（右箭头）
-                    next_btn = page.locator(".ant-pagination-next button, .ant-pagination-next").first
+                    # 获取所有分页按钮
+                    page_items = page.locator(".cmcc-page-item").all()
+                    total_pages = len(page_items)
+                    print(f"     共 {total_pages} 页")
                     
-                    if next_btn.count() == 0:
-                        # 尝试其他选择器
-                        next_btn = page.locator(".ant-pagination-next").first
+                    if page_num >= total_pages:
+                        print(f"     已到最后一页")
+                        break
                     
-                    if next_btn.count() > 0:
-                        # 检查是否禁用
-                        class_attr = next_btn.get_attribute("class") or ""
-                        disabled = next_btn.is_disabled() if hasattr(next_btn, 'is_disabled') else False
-                        
-                        if "disabled" in class_attr or "ant-pagination-disabled" in class_attr or disabled:
-                            print(f"     已到最后一页")
-                            break
-                        
-                        next_btn.click()
+                    # 点击下一页
+                    next_page_num = page_num + 1
+                    next_page_btn = page.locator(f".cmcc-page-item[title='{next_page_num}']").first
+                    
+                    if next_page_btn.count() > 0:
+                        next_page_btn.click()
                         time.sleep(3)
                         page_num += 1
                     else:
-                        # 尝试直接点击页码+1
-                        next_page = page_num + 1
-                        page_btn = page.locator(f".ant-pagination-item[title='{next_page}'], .pagination-item:has-text('{next_page}')").first
-                        
-                        if page_btn.count() > 0:
-                            page_btn.click()
-                            time.sleep(3)
-                            page_num += 1
+                        # 尝试点击"下一页"按钮
+                        next_btn = page.locator(".cmcc-page-next").first
+                        if next_btn.count() > 0:
+                            class_attr = next_btn.get_attribute("class") or ""
+                            if "disabled" not in class_attr:
+                                next_btn.click()
+                                time.sleep(3)
+                                page_num += 1
+                            else:
+                                print(f"     已到最后一页")
+                                break
                         else:
-                            print(f"     未找到下一页按钮")
+                            print(f"     未找到下一页")
                             break
                         
                 except Exception as e:
