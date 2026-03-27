@@ -2,7 +2,7 @@
 """
 移动招标信息抓取 - 独立运行
 结果保存到 cmcc_bids.json
-优化：限定今天发布 + 翻页抓取 + 正确处理日期筛选
+优化：限定今天发布 + 翻页抓取
 """
 
 import json
@@ -91,61 +91,37 @@ def fetch_cmcc():
             page.goto(url, wait_until="load", timeout=90000)
             time.sleep(3)
             
-            # 尝试点击日期选择器设置为今天
-            print(f"  设置日期筛选为今天...")
+            # 设置日期筛选为今天
+            print(f"  设置日期筛选: {TODAY} 至 {TODAY}")
             try:
-                # 找到日期输入框并点击
-                date_inputs = page.locator("input.ant-calendar-picker-input, input[placeholder*='日期'], input.cmcc-input").all()
-                if len(date_inputs) >= 2:
-                    # 点击开始日期
-                    date_inputs[0].click()
-                    time.sleep(1)
-                    
-                    # 尝试点击"今天"按钮
-                    today_btn = page.locator("a:has-text('今天'), .ant-calendar-today-btn, [class*='today']").first
-                    if today_btn.count() > 0:
-                        today_btn.click()
-                        time.sleep(0.5)
-                    else:
-                        # 如果没有今天按钮，点击确定
-                        ok_btn = page.locator("button:has-text('确定'), .ant-calendar-ok-btn").first
-                        if ok_btn.count() > 0:
-                            ok_btn.click()
-                    
+                # 找到发布时间输入框
+                date_input = page.locator("input[placeholder*='发布时间']").first
+                if date_input.count() > 0:
+                    # 清空并输入日期范围
+                    date_input.click()
                     time.sleep(0.5)
-                    
-                    # 点击结束日期
-                    date_inputs[1].click()
-                    time.sleep(1)
-                    
-                    today_btn = page.locator("a:has-text('今天'), .ant-calendar-today-btn, [class*='today']").first
-                    if today_btn.count() > 0:
-                        today_btn.click()
-                    else:
-                        ok_btn = page.locator("button:has-text('确定'), .ant-calendar-ok-btn").first
-                        if ok_btn.count() > 0:
-                            ok_btn.click()
-                    
+                    date_input.fill(f"{TODAY} - {TODAY}")
                     time.sleep(0.5)
-                    print(f"    ✅ 已设置日期为今天")
+                    print(f"    ✅ 已设置日期")
+                    
+                    # 点击空白处关闭日历
+                    page.mouse.click(100, 100)
+                    time.sleep(0.5)
             except Exception as e:
                 print(f"    ⚠️ 设置日期失败: {e}")
             
             # 点击查询按钮
             print("  点击查询按钮...")
             try:
-                search_btn = page.locator("button:has-text('查询'), .search-btn, button[type='submit']").first
+                search_btn = page.locator("button:has-text('查询')").first
                 if search_btn.count() > 0:
                     search_btn.click()
-                    time.sleep(5)  # 增加等待时间让表格完全加载
+                    time.sleep(5)  # 等待查询结果加载
                     print("    ✅ 已点击查询")
                 else:
                     print("    ⚠️ 未找到查询按钮")
             except Exception as e:
                 print(f"    ⚠️ 点击查询失败: {e}")
-            
-            # 等待表格刷新
-            time.sleep(3)
             
             # 开始翻页抓取
             page_num = 1
@@ -153,6 +129,9 @@ def fetch_cmcc():
             
             while page_num <= max_pages:
                 print(f"\n  📄 正在处理第 {page_num} 页...")
+                
+                # 等待表格加载
+                time.sleep(2)
                 
                 # 获取当前页的所有行
                 rows = page.locator("tr.ant-table-row, table tbody tr").all()
@@ -230,30 +209,41 @@ def fetch_cmcc():
                 
                 # 尝试翻到下一页
                 try:
-                    # 先滚动到底部，确保分页按钮可见
+                    # 滚动到底部，确保分页按钮可见
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     time.sleep(2)
                     
-                    # 查找所有分页按钮来确定总页数
-                    page_items = page.locator("li.ant-pagination-item").all()
-                    total_pages = len(page_items)
-                    print(f"     共 {total_pages} 页")
+                    # 找下一页按钮（右箭头）
+                    next_btn = page.locator("button:has(>"), .ant-pagination-next button, li.ant-pagination-next").first
                     
-                    if page_num >= total_pages:
-                        print(f"     已到最后一页")
-                        break
+                    if next_btn.count() == 0:
+                        # 尝试其他选择器
+                        next_btn = page.locator(".ant-pagination-next").first
                     
-                    # 点击下一页码
-                    next_page_num = page_num + 1
-                    next_page_btn = page.locator(f"li.ant-pagination-item[title='{next_page_num}']").first
-                    
-                    if next_page_btn.count() > 0:
-                        next_page_btn.click()
+                    if next_btn.count() > 0:
+                        # 检查是否禁用
+                        class_attr = next_btn.get_attribute("class") or ""
+                        disabled = next_btn.is_disabled() if hasattr(next_btn, 'is_disabled') else False
+                        
+                        if "disabled" in class_attr or "ant-pagination-disabled" in class_attr or disabled:
+                            print(f"     已到最后一页")
+                            break
+                        
+                        next_btn.click()
                         time.sleep(3)
                         page_num += 1
                     else:
-                        print(f"     未找到第 {next_page_num} 页按钮")
-                        break
+                        # 尝试直接点击页码+1
+                        next_page = page_num + 1
+                        page_btn = page.locator(f".ant-pagination-item[title='{next_page}'], .pagination-item:has-text('{next_page}')").first
+                        
+                        if page_btn.count() > 0:
+                            page_btn.click()
+                            time.sleep(3)
+                            page_num += 1
+                        else:
+                            print(f"     未找到下一页按钮")
+                            break
                         
                 except Exception as e:
                     print(f"     翻页结束: {e}")
