@@ -1,266 +1,162 @@
 #!/usr/bin/env python3
 """
-移动招标信息抓取 - 独立运行
-结果保存到 cmcc_bids.json
-优化：限定今天发布 + 翻页抓取
+移动招标信息抓取 - 简化版测试
 """
 
 import json
-import os
 import time
 from datetime import datetime
-from dateutil import parser as date_parser
-
 from playwright.sync_api import sync_playwright
 
 OUTPUT_FILE = "cmcc_bids.json"
 KEYWORDS = ["数智化", "数据", "算力", "战略"]
 TODAY = datetime.now().strftime("%Y-%m-%d")
 
-CMCC_BID_TYPE_MAP = {
-    "CANDIDATE_PUBLICITY": "候选人公示",
-    "WIN_BID": "中选结果公示",
-    "WIN_BID_PUBLICITY": "中选结果公示",
-    "BIDDING": "采购公告",
-    "BIDDING_PROCUREMENT": "采购公告",
-    "PROCUREMENT": "直接采购公示",
-    "PREQUALIFICATION": "资格预审公告",
-}
-
-
-def match_keywords(text: str) -> bool:
-    if not text:
-        return False
-    return any(kw in text for kw in KEYWORDS)
-
-
-def extract_province(text: str) -> str:
-    if not text:
-        return "全国"
-    provinces = ["北京", "天津", "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
-                 "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南",
-                 "湖北", "湖南", "广东", "广西", "海南", "重庆", "四川", "贵州",
-                 "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆"]
-    for p in provinces:
-        if p in text:
-            return p
-    return "全国"
-
-
-def is_today(date_str: str) -> bool:
-    try:
-        dt = date_parser.parse(date_str)
-        return dt.strftime("%Y-%m-%d") == TODAY
-    except:
-        return False
-
 
 def fetch_cmcc():
-    print(f"=== 抓取中国移动招标信息 {datetime.now().strftime('%H:%M:%S')} ===")
-    print(f"限定日期: {TODAY}")
-    print(f"关键词: {' | '.join(KEYWORDS)}")
+    print(f"=== 测试移动招标抓取 {datetime.now().strftime('%H:%M:%S')} ===")
     
     results = []
     playwright = sync_playwright().start()
-    browser = playwright.chromium.launch(
-        headless=True,
-        args=['--no-sandbox', '--disable-dev-shm-usage']
-    )
-    context = browser.new_context(
-        viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        locale="zh-CN"
-    )
+    browser = playwright.chromium.launch(headless=True)
+    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+    page = context.new_page()
     
-    urls = [
-        ("https://b2b.10086.cn/#/biddingProcurementBulletin", "招标采购公告"),
-        ("https://b2b.10086.cn/#/procurementServices", "采购意见征求公告")
-    ]
-    
-    for url, page_name in urls:
-        print(f"\n{'='*60}")
-        print(f"正在访问: {page_name}")
-        print(f"{'='*60}")
+    try:
+        # 访问页面
+        print("访问招标采购公告...")
+        page.goto("https://b2b.10086.cn/#/biddingProcurementBulletin", wait_until="load", timeout=90000)
+        time.sleep(5)
         
-        page = context.new_page()
-        
+        # 设置日期为今天并查询
+        print("设置日期并查询...")
         try:
-            print("  正在加载页面...")
-            page.goto(url, wait_until="load", timeout=90000)
-            time.sleep(3)
+            date_input = page.locator(".cmcc-date-picker input").first
+            if date_input.count() > 0:
+                date_input.click()
+                time.sleep(1)
+                # 点击27号两次（开始和结束日期）
+                day_27 = page.locator("text=27").first
+                if day_27.count() > 0:
+                    day_27.click()
+                    time.sleep(0.5)
+                    day_27.click()
+                    time.sleep(0.5)
+        except Exception as e:
+            print(f"  日期设置跳过: {e}")
+        
+        # 点击查询
+        try:
+            search_btn = page.locator("button:has-text('查询')").first
+            if search_btn.count() > 0:
+                search_btn.click()
+                time.sleep(5)
+                print("已查询")
+        except:
+            pass
+        
+        # 翻页抓取
+        page_num = 1
+        max_pages = 5
+        
+        while page_num <= max_pages:
+            print(f"\n第 {page_num} 页:")
+            time.sleep(2)
             
-            # 设置日期筛选为今天
-            print(f"  设置日期筛选: {TODAY} 至 {TODAY}")
-            try:
-                # 点击日期输入框
-                date_input = page.locator(".cmcc-date-picker input[placeholder*='时间段']").first
-                if date_input.count() > 0:
-                    date_input.click()
+            # 获取记录 - 使用正确的表格选择器
+            rows = page.locator(".cmcc-table-row").all()
+            if not rows:
+                rows = page.locator(".cmcc-table-tbody tr").all()
+            print(f"  找到 {len(rows)} 条记录")
+            
+            # 显示前3条
+            for i, row in enumerate(rows[:3]):
+                try:
+                    cells = row.locator("td").all()
+                    if len(cells) >= 4:
+                        date = cells[3].inner_text().strip()
+                        title = cells[2].inner_text().strip()[:50]
+                        print(f"  [{i+1}] {date} | {title}...")
+                except:
+                    pass
+            
+            # 检查关键词匹配
+            for row in rows:
+                try:
+                    cells = row.locator("td").all()
+                    if len(cells) < 4:
+                        continue
+                    title = cells[2].inner_text().strip()
+                    company = cells[1].inner_text().strip()
+                    date_str = cells[3].inner_text().strip()
+                    
+                    # 只匹配今天的记录
+                    if TODAY not in date_str:
+                        continue
+                    
+                    # 检查关键词
+                    if not any(kw in title for kw in KEYWORDS):
+                        continue
+                    
+                    # 获取URL
+                    cells[2].locator("a").first.click()
+                    time.sleep(2)
+                    detail_page = context.pages[-1]
+                    url = detail_page.url
+                    detail_page.close()
                     time.sleep(1)
                     
-                    # 点击今天的日期（27号）
-                    today_cell = page.locator(f".cmcc-date-picker-cells-cell:has-text('{int(TODAY.split('-')[2])}')").first
-                    if today_cell.count() > 0:
-                        today_cell.click()
-                        time.sleep(0.5)
-                        today_cell.click()  # 再点击一次选择结束日期
-                        time.sleep(0.5)
-                        print(f"    ✅ 已选择今天")
-            except Exception as e:
-                print(f"    ⚠️ 设置日期失败: {e}")
+                    results.append({
+                        "platform": "移动",
+                        "province": "全国",
+                        "type": "采购公告",
+                        "company": company,
+                        "title": title,
+                        "url": url,
+                        "date": date_str
+                    })
+                    print(f"  ✓ 匹配: {title[:40]}...")
+                except:
+                    continue
             
-            # 点击查询按钮
-            print("  点击查询按钮...")
+            # 翻页
             try:
-                search_btn = page.locator("button:has-text('查询')").first
-                if search_btn.count() > 0:
-                    search_btn.click()
-                    time.sleep(5)
-                    print("    ✅ 已点击查询")
-            except Exception as e:
-                print(f"    ⚠️ 点击查询失败: {e}")
-            
-            # 开始翻页抓取
-            page_num = 1
-            max_pages = 20
-            
-            while page_num <= max_pages:
-                print(f"\n  📄 正在处理第 {page_num} 页...")
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(2)
                 
-                # 获取当前页的所有行
-                rows = page.locator("tr.ant-table-row, table tbody tr").all()
-                print(f"     本页找到 {len(rows)} 条记录")
+                # 获取总页数
+                page_items = page.locator(".cmcc-page-item").all()
+                total = len(page_items)
+                print(f"  共 {total} 页")
                 
-                # 调试：显示前几条记录
-                for idx, row in enumerate(rows[:3]):
-                    try:
-                        cells = row.locator("td").all()
-                        if len(cells) >= 4:
-                            d = cells[3].inner_text().strip()
-                            t = cells[2].inner_text().strip()[:40]
-                            print(f"       [{idx+1}] 日期:{d} | {t}...")
-                    except:
-                        pass
-                
-                page_has_today = False
-                
-                for row in rows:
-                    try:
-                        cells = row.locator("td").all()
-                        if len(cells) < 4:
-                            continue
-                        
-                        bid_type = cells[0].inner_text().strip()
-                        company = cells[1].inner_text().strip()
-                        title = cells[2].inner_text().strip()
-                        date_str = cells[3].inner_text().strip()
-                        
-                        # 检查是否为今天发布
-                        if not is_today(date_str):
-                            continue
-                        
-                        page_has_today = True
-                        
-                        # 检查关键词匹配
-                        if not match_keywords(title) and not match_keywords(company):
-                            continue
-                        
-                        # 点击获取详情URL
-                        title_link = cells[2].locator("a").first
-                        if not title_link:
-                            continue
-                        
-                        title_link.click()
-                        time.sleep(2)
-                        
-                        detail_page = context.pages[-1]
-                        detail_url = detail_page.url
-                        detail_page.close()
-                        time.sleep(1)
-                        
-                        # 解析类型
-                        bid_type_cn = "其他"
-                        for key, value in CMCC_BID_TYPE_MAP.items():
-                            if key in detail_url:
-                                bid_type_cn = value
-                                break
-                        
-                        province = extract_province(company)
-                        
-                        results.append({
-                            "platform": "移动",
-                            "province": province,
-                            "type": bid_type_cn,
-                            "company": company,
-                            "title": title,
-                            "url": detail_url,
-                            "date": date_str
-                        })
-                        print(f"     ✓ 匹配 [{date_str}]: {title[:40]}...")
-                        
-                    except Exception as e:
-                        continue
-                
-                # 尝试翻到下一页
-                try:
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(2)
-                    
-                    # 获取所有分页按钮
-                    page_items = page.locator(".cmcc-page-item").all()
-                    total_pages = len(page_items)
-                    print(f"     共 {total_pages} 页")
-                    
-                    if page_num >= total_pages:
-                        print(f"     已到最后一页")
-                        break
-                    
-                    # 点击下一页
-                    next_page_num = page_num + 1
-                    next_page_btn = page.locator(f".cmcc-page-item[title='{next_page_num}']").first
-                    
-                    if next_page_btn.count() > 0:
-                        next_page_btn.click()
-                        time.sleep(3)
-                        page_num += 1
-                    else:
-                        # 尝试点击"下一页"按钮
-                        next_btn = page.locator(".cmcc-page-next").first
-                        if next_btn.count() > 0:
-                            class_attr = next_btn.get_attribute("class") or ""
-                            if "disabled" not in class_attr:
-                                next_btn.click()
-                                time.sleep(3)
-                                page_num += 1
-                            else:
-                                print(f"     已到最后一页")
-                                break
-                        else:
-                            print(f"     未找到下一页")
-                            break
-                        
-                except Exception as e:
-                    print(f"     翻页结束: {e}")
+                if page_num >= total:
+                    print("  已到最后一页")
                     break
-            
-            print(f"\n  完成 {page_name}")
-                    
-        except Exception as e:
-            print(f"  抓取失败: {e}")
-        finally:
-            page.close()
+                
+                # 点击下一页
+                next_btn = page.locator(f".cmcc-page-item[title='{page_num + 1}']").first
+                if next_btn.count() > 0:
+                    next_btn.click()
+                    time.sleep(3)
+                    page_num += 1
+                else:
+                    break
+            except Exception as e:
+                print(f"  翻页结束: {e}")
+                break
+        
+    except Exception as e:
+        print(f"错误: {e}")
+    finally:
+        page.close()
+        browser.close()
+        playwright.stop()
     
-    browser.close()
-    playwright.stop()
-    
-    # 保存结果
+    # 保存
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     
-    print(f"\n{'='*60}")
-    print(f"✅ 移动招标抓取完成: {len(results)} 条")
-    print(f"{'='*60}")
+    print(f"\n完成: {len(results)} 条匹配")
     return len(results)
 
 
