@@ -145,6 +145,17 @@ def fetch_cmcc():
                 
                 print(f"     本页找到 {len(rows)} 条记录")
                 
+                # 调试：显示前3条记录的日期
+                for idx, row in enumerate(rows[:3]):
+                    try:
+                        cells = row.locator("td").all()
+                        if len(cells) >= 4:
+                            d = cells[3].inner_text().strip()
+                            t = cells[2].inner_text().strip()[:30]
+                            print(f"       [{idx+1}] 日期:{d} | 标题:{t}...")
+                    except:
+                        pass
+                
                 page_has_today = False  # 标记本页是否有今天的记录
                 
                 for row in rows:
