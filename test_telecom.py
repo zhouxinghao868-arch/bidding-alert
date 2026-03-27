@@ -1,43 +1,78 @@
 #!/usr/bin/env python3
-"""测试：直接调用电信API"""
-import sys, json, requests
+"""测试：用popup事件捕获电信详情页"""
+import sys, time
+from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(line_buffering=True)
 
-url = "https://caigou.chinatelecom.com.cn/portal/base/announcementJoin/queryListNew"
-headers = {
-    "Content-Type": "application/json",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Referer": "https://caigou.chinatelecom.com.cn/search",
-    "Origin": "https://caigou.chinatelecom.com.cn"
-}
+pw = sync_playwright().start()
+br = pw.chromium.launch(headless=True)
+ctx = br.new_context(viewport={"width":1920,"height":1080},
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+page = ctx.new_page()
 
-# 尝试不同的payload格式
-payloads = [
-    # 空payload
-    {},
-    # 分页参数
-    {"pageNum": 1, "pageSize": 10},
-    # 更完整的参数
-    {"pageNum": 1, "pageSize": 10, "noticeType": "", "keyword": "", "province": ""}
-]
+page.goto("https://caigou.chinatelecom.com.cn/search", wait_until="load", timeout=120000)
+time.sleep(8)
 
-for i, payload in enumerate(payloads):
-    print(f"\n=== 尝试 payload {i+1}: {json.dumps(payload)} ===")
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=30, verify=True)
-        print(f"状态码: {resp.status_code}")
-        data = resp.json()
-        print(f"响应keys: {list(data.keys())}")
-        if data.get('code') == 200:
-            page_info = data.get('data', {}).get('pageInfo', {})
-            records = page_info.get('list', [])
-            print(f"total: {page_info.get('total')}, records: {len(records)}")
-            if records:
-                r = records[0]
-                print(f"第1条: {r.get('docTitle','')[:60]}")
-                print(f"  日期: {r.get('createDate')}, 省份: {r.get('provinceName')}, 类型: {r.get('docType')}")
-            break
-        else:
-            print(f"响应: {json.dumps(data, ensure_ascii=False)[:300]}")
-    except Exception as e:
-        print(f"失败: {e}")
+# 用expect_popup捕获新窗口
+print("=== 方法1: expect_popup 点击表格行 ===")
+try:
+    row = page.locator(".el-table__row").first
+    print(f"表格行文本: {row.inner_text()[:80]}")
+    
+    with page.expect_popup(timeout=10000) as popup_info:
+        row.click()
+    popup = popup_info.value
+    time.sleep(3)
+    print(f"弹窗URL: {popup.url}")
+    popup.close()
+except Exception as e:
+    print(f"方法1失败: {e}")
+
+# 方法2: 监听navigation
+print("\n=== 方法2: 用JS拦截window.open ===")
+try:
+    # 注入JS，拦截window.open
+    page.evaluate("""() => {
+        window.__openedUrls = [];
+        const origOpen = window.open;
+        window.open = function(url, ...args) {
+            window.__openedUrls.push(url);
+            return origOpen.call(this, url, ...args);
+        };
+    }""")
+    
+    row = page.locator(".el-table__row").nth(1)
+    row.click()
+    time.sleep(3)
+    
+    opened = page.evaluate("() => window.__openedUrls")
+    print(f"拦截到的URL: {opened}")
+except Exception as e:
+    print(f"方法2失败: {e}")
+
+# 方法3: 直接检查所有页面
+print(f"\n=== 当前所有页面 ({len(ctx.pages)}) ===")
+for i, p in enumerate(ctx.pages):
+    print(f"  页面{i}: {p.url}")
+
+# 方法4: 检查router
+print("\n=== 方法4: 检查Vue Router ===")
+route_info = page.evaluate("""() => {
+    const app = document.querySelector('#app');
+    if (app && app.__vue__) {
+        const router = app.__vue__.$router;
+        if (router) {
+            return {
+                currentRoute: router.currentRoute ? router.currentRoute.fullPath : 'none',
+                routes: router.options.routes ? router.options.routes.map(r => ({path: r.path, name: r.name})) : []
+            };
+        }
+    }
+    // 检查 umi 路由
+    if (window.g_routes) return {routes: window.g_routes.map(r => r.path)};
+    return 'no router found';
+}""")
+print(f"路由信息: {route_info}")
+
+br.close()
+pw.stop()

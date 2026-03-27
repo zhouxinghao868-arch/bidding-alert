@@ -17,6 +17,7 @@ BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
 API_URL = "https://caigou.chinatelecom.com.cn/portal/base/announcementJoin/queryListNew"
+BASE_URL = "https://caigou.chinatelecom.com.cn"
 HEADERS = {
     "Content-Type": "application/json",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -25,13 +26,21 @@ HEADERS = {
 }
 
 def fetch_page(page_num, page_size=20):
-    """获取一页数据"""
+    """获取一页数据，带重试"""
     payload = {"pageNum": page_num, "pageSize": page_size}
-    resp = requests.post(API_URL, json=payload, headers=HEADERS, timeout=30)
-    data = resp.json()
-    if data.get('code') == 200:
-        page_info = data.get('data', {}).get('pageInfo', {})
-        return page_info.get('list', []), page_info.get('total', 0)
+    for attempt in range(3):
+        try:
+            resp = requests.post(API_URL, json=payload, headers=HEADERS, timeout=60)
+            data = resp.json()
+            if data.get('code') == 200:
+                page_info = data.get('data', {}).get('pageInfo', {})
+                return page_info.get('list', []), page_info.get('total', 0)
+        except Exception as e:
+            if attempt < 2:
+                print(f"    第{page_num}页请求失败，重试({attempt+1}/3)...")
+                import time; time.sleep(3)
+            else:
+                print(f"    第{page_num}页请求失败: {e}")
     return [], 0
 
 def fetch_telecom():
@@ -101,7 +110,7 @@ def fetch_telecom():
                 "type": doc_type,
                 "company": "中国电信",
                 "title": title,
-                "url": "https://caigou.chinatelecom.com.cn/search",
+                "url": f"{BASE_URL}/DeclareDetails?id={rid}&docTypeCode={record.get('docTypeCode','')}&securityViewCode={record.get('securityViewCode','')}",
                 "date": create_date
             })
         
