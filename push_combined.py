@@ -127,9 +127,9 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
     
     # 中国移动部分
     if cmcc_new:
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("📱 中国移动招标信息")
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("")
         
         for i, bid in enumerate(cmcc_new, 1):
@@ -141,9 +141,9 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
     
     # 中国联通部分
     if unicom_new:
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("🌐 中国联通招标信息")
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("")
         
         for i, bid in enumerate(unicom_new, 1):
@@ -155,9 +155,9 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
     
     # 中国电信部分
     if telecom_new:
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("📞 中国电信招标信息")
-        lines.append("=" * 40)
+        lines.append("─" * 18)
         lines.append("")
         
         for i, bid in enumerate(telecom_new, 1):
@@ -167,7 +167,7 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
             lines.append(f"链接：{bid['url']}")
             lines.append("")
     
-    lines.append("=" * 40)
+    lines.append("─" * 18)
     lines.append(f"数据来源: 中国移动采购与招标网 | 中国联通采购与招标网 | 中国电信阳光采购网")
     lines.append(f"关键词: {' | '.join(KEYWORDS)} | 更新时间: {now_bjt().strftime('%H:%M')}")
     
