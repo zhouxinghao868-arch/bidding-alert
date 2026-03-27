@@ -214,7 +214,7 @@ def fetch_cmcc():
                     time.sleep(2)
                     
                     # 找下一页按钮（右箭头）
-                    next_btn = page.locator("button:has(>"), .ant-pagination-next button, li.ant-pagination-next").first
+                    next_btn = page.locator(".ant-pagination-next button, .ant-pagination-next").first
                     
                     if next_btn.count() == 0:
                         # 尝试其他选择器
