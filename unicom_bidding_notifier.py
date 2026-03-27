@@ -160,7 +160,7 @@ class UnicomBiddingScraper:
             return None
     
     def fetch_bid_information(self) -> List[Dict]:
-        """抓取联通招标信息（筛选今天）"""
+        """抓取联通招标信息（筛选今天，翻页抓取全部）"""
         url = "https://www.chinaunicombidding.cn/bidInformation"
         results = []
         page = self.context.new_page()
@@ -183,92 +183,102 @@ class UnicomBiddingScraper:
             except Exception as e:
                 print(f"  筛选失败: {e}")
             
-            # 获取所有招标卡片
-            print("  正在获取招标列表...")
-            # 等待列表加载
-            try:
-                page.wait_for_selector("h5", timeout=10000)
-            except:
-                print("  警告: 等待标题元素超时")
-            
-            time.sleep(2)
-            
-            # 通过h5标题元素定位招标条目（每个招标都有h5标题）
-            title_elements = page.query_selector_all("h5")
-            print(f"  找到 {len(title_elements)} 个标题元素")
-            
-            # 将标题元素转换为父级卡片元素
-            cards = []
-            for title_elem in title_elements:
+            # 翻页抓取所有公告
+            page_num = 1
+            while True:
+                print(f"\n  正在抓取第 {page_num} 页...")
+                
+                # 等待列表加载
                 try:
-                    # 向上查找父元素（包含整个招标信息的容器）
-                    parent = title_elem.evaluate("el => el.parentElement")
-                    if parent:
-                        cards.append(title_elem)
+                    page.wait_for_selector("h5", timeout=10000)
                 except:
-                    continue
-            
-            print(f"  找到 {len(cards)} 条招标信息")
-            
-            for title_elem in title_elements[:20]:  # 只处理前20条
+                    print("  警告: 等待标题元素超时")
+                
+                time.sleep(2)
+                
+                # 获取当前页的招标信息
+                title_elements = page.query_selector_all("h5")
+                print(f"    本页找到 {len(title_elements)} 条招标信息")
+                
+                for title_elem in title_elements:
+                    try:
+                        title = title_elem.inner_text().strip()
+                        if not title:
+                            continue
+                        
+                        # 获取父元素来提取其他信息
+                        parent = title_elem.evaluate("el => el.parentElement")
+                        if not parent:
+                            continue
+                        
+                        parent_text = parent.inner_text() if hasattr(parent, 'inner_text') else ""
+                        
+                        # 提取公告类型
+                        bid_type = "未知"
+                        for t in ["采购公告", "采购结果", "采购计划", "采购准备"]:
+                            if t in parent_text:
+                                bid_type = t
+                                break
+                        
+                        # 提取招标人
+                        company = ""
+                        if "招标人：" in parent_text:
+                            parts = parent_text.split("招标人：")
+                            if len(parts) > 1:
+                                company = parts[1].split("\n")[0].strip()
+                        
+                        print(f"    发现: {title[:40]}...")
+                        
+                        # 尝试获取详情URL
+                        detail_url = self._get_detail_url(page, title)
+                        if not detail_url:
+                            detail_url = f"https://www.chinaunicombidding.cn/bidInformation?keyword={title[:30]}"
+                        
+                        # 检查是否已推送
+                        if detail_url in self.pushed_records:
+                            print(f"      已推送过，跳过")
+                            continue
+                        
+                        bid_info = {
+                            "title": title,
+                            "url": detail_url,
+                            "company": company or "中国联通",
+                            "type": bid_type,
+                            "publish_time": datetime.now().strftime("%Y-%m-%d"),
+                        }
+                        results.append(bid_info)
+                        print(f"      ✓ 成功抓取")
+                        
+                    except Exception as e:
+                        print(f"    处理卡片失败: {e}")
+                        continue
+                
+                # 检查是否有下一页
                 try:
-                    title = title_elem.inner_text().strip()
-                    if not title:
-                        continue
+                    # 查找分页信息，看是否已经是最后一页
+                    pagination_text = page.locator("text=/第 \\d+-\\d+ 条/总共 \\d+ 条/").first.inner_text()
+                    print(f"    分页信息: {pagination_text}")
                     
-                    # 获取父元素来提取其他信息
-                    parent = title_elem.evaluate("el => el.parentElement")
-                    if not parent:
-                        continue
-                    
-                    parent_html = parent.inner_html() if hasattr(parent, 'inner_html') else ""
-                    parent_text = parent.inner_text() if hasattr(parent, 'inner_text') else ""
-                    
-                    # 提取公告类型 - 查找标签
-                    bid_type = "未知"
-                    for t in ["采购公告", "采购结果", "采购计划", "采购准备"]:
-                        if t in parent_text:
-                            bid_type = t
+                    # 查找下一页按钮（使用 ant-pagination 类）
+                    # 找所有 ant-pagination-item-link 按钮，第二个是下一页
+                    next_btns = page.locator(".ant-pagination-item-link").all()
+                    if len(next_btns) >= 2:
+                        next_btn = next_btns[1]  # 第二个是下一页按钮
+                        is_disabled = next_btn.is_disabled()
+                        if not is_disabled:
+                            next_btn.click()
+                            time.sleep(3)  # 等待页面加载
+                            page_num += 1
+                        else:
+                            print(f"\n  已是最后一页，共抓取 {len(results)} 条")
                             break
-                    
-                    # 提取招标人
-                    company = ""
-                    if "招标人：" in parent_text:
-                        parts = parent_text.split("招标人：")
-                        if len(parts) > 1:
-                            company = parts[1].split("\n")[0].strip()
-                    
-                    # 检查关键词匹配
-                    matched_keywords = self._check_keywords(title, company)
-                    # 暂时不过滤，抓取全部今天的公告
-                    
-                    print(f"  发现: {title[:50]}...")
-                    
-                    # 尝试获取详情URL
-                    detail_url = self._get_detail_url(page, title)
-                    if not detail_url:
-                        # 如果没有获取到详情页，使用搜索链接
-                        detail_url = f"https://www.chinaunicombidding.cn/bidInformation?keyword={title[:30]}"
-                    
-                    # 检查是否已推送
-                    if detail_url in self.pushed_records:
-                        print(f"    已推送过，跳过")
-                        continue
-                    
-                    bid_info = {
-                        "title": title,
-                        "url": detail_url,
-                        "company": company or "中国联通",
-                        "type": bid_type,
-                        "publish_time": datetime.now().strftime("%Y-%m-%d"),
-                        "keywords": matched_keywords,
-                    }
-                    results.append(bid_info)
-                    print(f"    ✓ 成功抓取")
-                    
+                    else:
+                        print(f"\n  找不到分页按钮，共抓取 {len(results)} 条")
+                        break
+                        
                 except Exception as e:
-                    print(f"  处理卡片失败: {e}")
-                    continue
+                    print(f"\n  翻页处理: {e}，共抓取 {len(results)} 条")
+                    break
             
         except Exception as e:
             print(f"  抓取页面失败: {e}")
@@ -304,20 +314,24 @@ class FeishuPusher:
         
         type_summary = " | ".join([f"{t}{c}条" for t, c in type_count.items()])
         
-        # 构建消息内容
-        content_parts = [f"🎯 中国联通招标信息\n您好，此次一共检索{len(bids)}条新消息（{type_summary}）～\n"]
+        # 构建消息内容 - 显示全部公告
+        content_parts = [f"🎯 中国联通招标信息（今天）\n共检索到{len(bids)}条公告（{type_summary}）\n"]
         
-        # 按类型分组输出
-        for bid in bids[:10]:  # 最多显示10条
+        for bid in bids:
+            title = bid['title']
+            # 如果标题太长，截断显示
+            if len(title) > 40:
+                title = title[:37] + "..."
+            
             part = f"\n【{bid.get('type', '公告')}】"
             if bid.get('company'):
-                part += f"\n招标人：{bid['company']}"
-            part += f"\n标题：{bid['title']}"
-            part += f"\n链接：{bid['url']}\n"
+                company = bid['company']
+                if len(company) > 15:
+                    company = company[:12] + "..."
+                part += f" {company}"
+            part += f"\n{title}"
+            part += f"\n{bid['url']}\n"
             content_parts.append(part)
-        
-        if len(bids) > 10:
-            content_parts.append(f"\n...还有{len(bids) - 10}条公告，请访问网站查看详情")
         
         message = "".join(content_parts)
         
