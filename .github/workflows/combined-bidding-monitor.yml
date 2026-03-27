@@ -1,0 +1,48 @@
+name: 运营商招标信息整合监控
+
+# 状态: 已启动 (2026-03-27)
+# 关键词: 数智化、数据、算力、战略
+# 数据源: 中国移动(b2b.10086.cn) + 中国联通(chinaunicombidding.cn)
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 每小时运行一次（UTC时间整点，北京时间每小时的第8分钟）
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    if: true  # 已启动
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置Python环境
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 缓存已推送记录
+      uses: actions/cache@v4
+      with:
+        path: pushed_bids_combined.json
+        key: pushed-bids-combined-${{ github.run_id }}
+        restore-keys: |
+          pushed-bids-combined-
+    
+    - name: 安装依赖
+      run: |
+        pip install requests playwright python-dateutil
+        playwright install chromium
+    
+    - name: 运行整合招标监控
+      env:
+        FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+        FETCH_HOURS: ${{ secrets.FETCH_HOURS || '48' }}
+      run: python combined_bidding_notifier.py
+    
+    - name: 保存推送记录
+      uses: actions/cache@v4
+      with:
+        path: pushed_bids_combined.json
+        key: pushed-bids-combined-${{ github.run_id }}
