@@ -2,7 +2,7 @@ name: 中国联通招标信息监控
 
 on:
   schedule:
-    - cron: '0 9,13,17 * * *'  # 每天9点、13点、17点运行（UTC时间）
+    - cron: '0 * * * *'  # 每小时运行一次（UTC时间整点）
   workflow_dispatch:  # 支持手动触发
 
 jobs:

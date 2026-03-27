@@ -6,9 +6,11 @@
 
 import json
 import os
+import re
 import time
+import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from dateutil import parser as date_parser
 
 import requests
@@ -34,21 +36,54 @@ class UnicomBiddingScraper:
         self.context = None
         self.pushed_records = self._load_pushed_records()
     
-    def _load_pushed_records(self) -> set:
-        """加载已推送的记录"""
+    def _load_pushed_records(self) -> Dict:
+        """加载已推送的记录（使用标题哈希作为唯一标识）"""
         if os.path.exists(PUSHED_RECORDS_FILE):
             try:
                 with open(PUSHED_RECORDS_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    return set(data.get("urls", []))
+                    return json.load(f)
             except:
                 pass
-        return set()
+        return {"hashes": [], "urls": []}
     
     def _save_pushed_records(self):
         """保存已推送的记录"""
         with open(PUSHED_RECORDS_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"urls": list(self.pushed_records)}, f, ensure_ascii=False)
+            json.dump(self.pushed_records, f, ensure_ascii=False)
+    
+    def _get_bid_hash(self, title: str) -> str:
+        """生成招标信息的唯一哈希（基于标题）"""
+        # 使用标题前50个字符生成哈希，过滤掉一些可变内容
+        normalized_title = title.strip()[:50]
+        return hashlib.md5(normalized_title.encode('utf-8')).hexdigest()
+    
+    def is_bid_pushed(self, title: str, url: str) -> bool:
+        """检查招标信息是否已推送（基于标题哈希和URL双重检查）"""
+        bid_hash = self._get_bid_hash(title)
+        
+        # 检查标题哈希
+        if bid_hash in self.pushed_records.get("hashes", []):
+            return True
+        
+        # 检查URL
+        if url in self.pushed_records.get("urls", []):
+            return True
+        
+        return False
+    
+    def mark_bid_pushed(self, title: str, url: str):
+        """标记招标信息为已推送"""
+        bid_hash = self._get_bid_hash(title)
+        
+        if "hashes" not in self.pushed_records:
+            self.pushed_records["hashes"] = []
+        if "urls" not in self.pushed_records:
+            self.pushed_records["urls"] = []
+        
+        if bid_hash not in self.pushed_records["hashes"]:
+            self.pushed_records["hashes"].append(bid_hash)
+        if url not in self.pushed_records["urls"]:
+            self.pushed_records["urls"].append(url)
     
     def init_browser(self):
         """初始化浏览器"""
@@ -72,15 +107,12 @@ class UnicomBiddingScraper:
     def _get_detail_url(self, page: Page, title_text: str) -> Optional[str]:
         """点击标题获取详情页URL"""
         try:
-            # 找到包含该标题的链接/卡片
             title_elem = page.locator(f"h5:has-text('{title_text}')").first
             if title_elem.count() == 0:
                 return None
             
-            # 获取父级可点击元素
             clickable = title_elem.locator("..")
             if clickable.count() == 0:
-                # 尝试直接点击标题
                 with self.context.expect_page() as new_page_info:
                     title_elem.click()
             else:
@@ -94,70 +126,24 @@ class UnicomBiddingScraper:
             
             return detail_url
         except Exception as e:
-            print(f"  获取详情URL失败: {e}")
             return None
     
-    def _check_keywords(self, title: str, company: str) -> List[str]:
-        """检查标题和公司名是否包含关键词"""
-        text = f"{title} {company}"
-        matched = []
-        for keyword in KEYWORDS:
-            if keyword in text:
-                matched.append(keyword)
-        return matched
-    
-    def _parse_bid_info(self, card_element, page) -> Optional[Dict]:
-        """解析单个招标卡片信息"""
-        try:
-            # 提取公告类型
-            bid_type_elem = card_element.query_selector("[class*='tag']")
-            bid_type = bid_type_elem.inner_text().strip() if bid_type_elem else "未知"
-            
-            # 提取标题
-            title_elem = card_element.query_selector("h5")
-            title = title_elem.inner_text().strip() if title_elem else ""
-            
-            # 提取招标人
-            company_elem = card_element.query_selector("text=招标人：")
-            company = ""
-            if company_elem:
-                # 获取父元素文本
-                parent = company_elem.evaluate("el => el.parentElement.innerText")
-                if parent:
-                    company = parent.replace("招标人：", "").strip()
-            
-            # 提取招标编号
-            bid_no_elem = card_element.query_selector("text=招标编号：")
-            bid_no = ""
-            if bid_no_elem:
-                parent = bid_no_elem.evaluate("el => el.parentElement.innerText")
-                if parent:
-                    bid_no = parent.replace("招标编号：", "").strip()
-            
-            # 获取详情URL
-            detail_url = self._get_detail_url(page, title)
-            if not detail_url:
-                # 构造列表页URL作为备选
-                detail_url = "https://www.chinaunicombidding.cn/bidInformation"
-            
-            # 检查是否已推送
-            if detail_url in self.pushed_records:
-                return None
-            
-            bid_info = {
-                "title": title,
-                "url": detail_url,
-                "company": company or "中国联通",
-                "type": bid_type,
-                "bid_no": bid_no,
-                "publish_time": datetime.now().strftime("%Y-%m-%d"),
-            }
-            
-            return bid_info
-            
-        except Exception as e:
-            print(f"  解析卡片失败: {e}")
-            return None
+    def _extract_region(self, company: str) -> str:
+        """从公司名称中提取地区"""
+        # 常见的省份/城市关键词
+        regions = [
+            "北京", "上海", "天津", "重庆",
+            "黑龙江", "吉林", "辽宁", "河北", "山西", "山东",
+            "河南", "江苏", "安徽", "浙江", "福建", "江西",
+            "湖北", "湖南", "广东", "海南", "四川", "贵州",
+            "云南", "陕西", "甘肃", "青海", "台湾",
+            "内蒙古", "广西", "西藏", "宁夏", "新疆"
+        ]
+        
+        for region in regions:
+            if region in company:
+                return region
+        return ""
     
     def fetch_bid_information(self) -> List[Dict]:
         """抓取联通招标信息（筛选今天，翻页抓取全部）"""
@@ -168,7 +154,7 @@ class UnicomBiddingScraper:
         try:
             print(f"\n正在访问: {url}")
             page.goto(url, wait_until="networkidle", timeout=60000)
-            time.sleep(3)  # 等待页面完全加载
+            time.sleep(3)
             
             # 点击"今天"筛选
             print("  点击'今天'筛选...")
@@ -176,10 +162,8 @@ class UnicomBiddingScraper:
                 today_btn = page.locator("button:has-text('今 天')").first
                 if today_btn.count() > 0:
                     today_btn.click()
-                    time.sleep(3)  # 等待筛选结果
+                    time.sleep(3)
                     print("  已筛选今天的公告")
-                else:
-                    print("  警告: 未找到'今天'按钮")
             except Exception as e:
                 print(f"  筛选失败: {e}")
             
@@ -188,7 +172,6 @@ class UnicomBiddingScraper:
             while True:
                 print(f"\n  正在抓取第 {page_num} 页...")
                 
-                # 等待列表加载
                 try:
                     page.wait_for_selector("h5", timeout=10000)
                 except:
@@ -196,7 +179,6 @@ class UnicomBiddingScraper:
                 
                 time.sleep(2)
                 
-                # 获取当前页的招标信息
                 title_elements = page.query_selector_all("h5")
                 print(f"    本页找到 {len(title_elements)} 条招标信息")
                 
@@ -206,7 +188,6 @@ class UnicomBiddingScraper:
                         if not title:
                             continue
                         
-                        # 获取父元素来提取其他信息
                         parent = title_elem.evaluate("el => el.parentElement")
                         if not parent:
                             continue
@@ -214,7 +195,7 @@ class UnicomBiddingScraper:
                         parent_text = parent.inner_text() if hasattr(parent, 'inner_text') else ""
                         
                         # 提取公告类型
-                        bid_type = "未知"
+                        bid_type = "其他"
                         for t in ["采购公告", "采购结果", "采购计划", "采购准备"]:
                             if t in parent_text:
                                 bid_type = t
@@ -227,15 +208,18 @@ class UnicomBiddingScraper:
                             if len(parts) > 1:
                                 company = parts[1].split("\n")[0].strip()
                         
+                        # 获取地区
+                        region = self._extract_region(company)
+                        
                         print(f"    发现: {title[:40]}...")
                         
-                        # 尝试获取详情URL
+                        # 获取详情URL
                         detail_url = self._get_detail_url(page, title)
                         if not detail_url:
-                            detail_url = f"https://www.chinaunicombidding.cn/bidInformation?keyword={title[:30]}"
+                            detail_url = f"https://www.chinaunicombidding.cn/bidInformation"
                         
-                        # 检查是否已推送
-                        if detail_url in self.pushed_records:
+                        # 增强去重检查（基于标题哈希）
+                        if self.is_bid_pushed(title, detail_url):
                             print(f"      已推送过，跳过")
                             continue
                         
@@ -243,6 +227,7 @@ class UnicomBiddingScraper:
                             "title": title,
                             "url": detail_url,
                             "company": company or "中国联通",
+                            "region": region,
                             "type": bid_type,
                             "publish_time": datetime.now().strftime("%Y-%m-%d"),
                         }
@@ -255,19 +240,16 @@ class UnicomBiddingScraper:
                 
                 # 检查是否有下一页
                 try:
-                    # 查找分页信息，看是否已经是最后一页
                     pagination_text = page.locator("text=/第 \\d+-\\d+ 条/总共 \\d+ 条/").first.inner_text()
                     print(f"    分页信息: {pagination_text}")
                     
-                    # 查找下一页按钮（使用 ant-pagination 类）
-                    # 找所有 ant-pagination-item-link 按钮，第二个是下一页
                     next_btns = page.locator(".ant-pagination-item-link").all()
                     if len(next_btns) >= 2:
-                        next_btn = next_btns[1]  # 第二个是下一页按钮
+                        next_btn = next_btns[1]
                         is_disabled = next_btn.is_disabled()
                         if not is_disabled:
                             next_btn.click()
-                            time.sleep(3)  # 等待页面加载
+                            time.sleep(3)
                             page_num += 1
                         else:
                             print(f"\n  已是最后一页，共抓取 {len(results)} 条")
@@ -301,39 +283,65 @@ class FeishuPusher:
         self.webhook = webhook
     
     def send_message(self, bids: List[Dict]) -> bool:
-        """发送招标信息到飞书"""
+        """发送招标信息到飞书（优化格式）"""
         if not bids:
             print("\n没有新消息需要推送")
             return True
         
-        # 按公告类型分组统计
-        type_count = {}
+        # 按公告类型分组
+        bids_by_type = {}
         for bid in bids:
             bid_type = bid.get("type", "其他")
-            type_count[bid_type] = type_count.get(bid_type, 0) + 1
+            if bid_type not in bids_by_type:
+                bids_by_type[bid_type] = []
+            bids_by_type[bid_type].append(bid)
         
-        type_summary = " | ".join([f"{t}{c}条" for t, c in type_count.items()])
+        # 构建消息内容
+        lines = [
+            "📢 中国联通招标信息",
+            f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            f"📊 今日新增 {len(bids)} 条公告\n"
+        ]
         
-        # 构建消息内容 - 显示全部公告
-        content_parts = [f"🎯 中国联通招标信息（今天）\n共检索到{len(bids)}条公告（{type_summary}）\n"]
+        # 统计信息
+        type_order = ["采购公告", "采购结果", "采购计划", "采购准备", "其他"]
+        for bid_type in type_order:
+            if bid_type in bids_by_type:
+                count = len(bids_by_type[bid_type])
+                lines.append(f"{bid_type}: {count}条")
+        lines.append("")
         
-        for bid in bids:
-            title = bid['title']
-            # 如果标题太长，截断显示
-            if len(title) > 40:
-                title = title[:37] + "..."
+        # 详细列表（分组显示）
+        for bid_type in type_order:
+            if bid_type not in bids_by_type:
+                continue
             
-            part = f"\n【{bid.get('type', '公告')}】"
-            if bid.get('company'):
-                company = bid['company']
-                if len(company) > 15:
-                    company = company[:12] + "..."
-                part += f" {company}"
-            part += f"\n{title}"
-            part += f"\n{bid['url']}\n"
-            content_parts.append(part)
+            lines.append(f"\n{'='*40}")
+            lines.append(f"【{bid_type}】")
+            lines.append('='*40)
+            
+            for i, bid in enumerate(bids_by_type[bid_type], 1):
+                title = bid['title']
+                # 截断标题
+                if len(title) > 45:
+                    title = title[:42] + "..."
+                
+                region = bid.get('region', '')
+                company = bid.get('company', '')
+                
+                lines.append(f"\n{i}. {title}")
+                if region:
+                    lines.append(f"   📍 {region}")
+                if company:
+                    company_short = company[:20] + "..." if len(company) > 20 else company
+                    lines.append(f"   🏢 {company_short}")
+                lines.append(f"   🔗 {bid['url']}")
         
-        message = "".join(content_parts)
+        lines.append(f"\n{'='*40}")
+        lines.append("数据来源: 中国联通采购与招标网")
+        lines.append(f"共计 {len(bids)} 条 | 更新时间: {datetime.now().strftime('%H:%M')}")
+        
+        message = "\n".join(lines)
         
         # 发送消息
         payload = {
@@ -365,10 +373,7 @@ class FeishuPusher:
 def main():
     """主函数"""
     print(f"=== 中国联通招标信息抓取开始 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
-    print(f"抓取范围: 今天发布的公告")
-    print(f"关键词: {', '.join(KEYWORDS)}")
     
-    # 初始化抓取器
     scraper = UnicomBiddingScraper()
     scraper.init_browser()
     
@@ -380,24 +385,14 @@ def main():
             print("\n未找到新的招标公告")
             return
         
-        print(f"\n共找到 {len(bids)} 条招标信息")
-        
-        # 去重（基于URL）
-        unique_bids = []
-        seen_urls = set()
-        for bid in bids:
-            if bid["url"] not in seen_urls:
-                unique_bids.append(bid)
-                seen_urls.add(bid["url"])
-        
-        print(f"去重后: {len(unique_bids)} 条")
+        print(f"\n共找到 {len(bids)} 条新招标信息")
         
         # 推送到飞书
         pusher = FeishuPusher(FEISHU_WEBHOOK)
-        if pusher.send_message(unique_bids):
-            # 保存推送记录
-            for bid in unique_bids:
-                scraper.pushed_records.add(bid["url"])
+        if pusher.send_message(bids):
+            # 保存推送记录（使用增强的去重）
+            for bid in bids:
+                scraper.mark_bid_pushed(bid["title"], bid["url"])
             scraper._save_pushed_records()
         
     finally:
