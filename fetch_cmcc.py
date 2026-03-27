@@ -137,7 +137,7 @@ def fetch_cmcc():
                 search_btn = page.locator("button:has-text('查询'), .search-btn, button[type='submit']").first
                 if search_btn.count() > 0:
                     search_btn.click()
-                    time.sleep(3)
+                    time.sleep(5)  # 增加等待时间让表格完全加载
                     print("    ✅ 已点击查询")
                 else:
                     print("    ⚠️ 未找到查询按钮")
