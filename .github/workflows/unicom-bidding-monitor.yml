@@ -1,0 +1,42 @@
+name: 中国联通招标信息监控
+
+on:
+  schedule:
+    - cron: '0 9,13,17 * * *'  # 每天9点、13点、17点运行（UTC时间）
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置Python环境
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 缓存已推送记录
+      uses: actions/cache@v4
+      with:
+        path: pushed_bids_unicom.json
+        key: pushed-bids-unicom-${{ github.run_id }}
+        restore-keys: |
+          pushed-bids-unicom-
+    
+    - name: 安装依赖
+      run: |
+        pip install requests playwright python-dateutil
+        playwright install chromium
+    
+    - name: 运行联通招标监控
+      env:
+        FEISHU_WEBHOOK_UNICOM: ${{ secrets.FEISHU_WEBHOOK_UNICOM }}
+      run: python unicom_bidding_notifier.py
+    
+    - name: 保存推送记录
+      uses: actions/cache@v4
+      with:
+        path: pushed_bids_unicom.json
+        key: pushed-bids-unicom-${{ github.run_id }}
