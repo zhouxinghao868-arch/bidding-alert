@@ -230,40 +230,29 @@ def fetch_cmcc():
                 
                 # 尝试翻到下一页
                 try:
+                    # 先滚动到底部，确保分页按钮可见
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(1)
+                    time.sleep(2)
                     
-                    # 尝试多种方式翻页
-                    clicked = False
+                    # 查找所有分页按钮来确定总页数
+                    page_items = page.locator("li.ant-pagination-item").all()
+                    total_pages = len(page_items)
+                    print(f"     共 {total_pages} 页")
                     
-                    # 方法1: 下一页按钮
-                    try:
-                        next_btn = page.locator("li.ant-pagination-next").first
-                        if next_btn.count() > 0:
-                            # 检查是否是最后一页
-                            class_attr = next_btn.get_attribute("class") or ""
-                            if "disabled" not in class_attr and "ant-pagination-disabled" not in class_attr:
-                                next_btn.click()
-                                clicked = True
-                    except:
-                        pass
+                    if page_num >= total_pages:
+                        print(f"     已到最后一页")
+                        break
                     
-                    # 方法2: 页码+1
-                    if not clicked:
-                        try:
-                            next_page = page_num + 1
-                            page_btn = page.locator(f"li.ant-pagination-item[title='{next_page}']").first
-                            if page_btn.count() > 0:
-                                page_btn.click()
-                                clicked = True
-                        except:
-                            pass
+                    # 点击下一页码
+                    next_page_num = page_num + 1
+                    next_page_btn = page.locator(f"li.ant-pagination-item[title='{next_page_num}']").first
                     
-                    if clicked:
+                    if next_page_btn.count() > 0:
+                        next_page_btn.click()
                         time.sleep(3)
                         page_num += 1
                     else:
-                        print(f"     已到最后一页")
+                        print(f"     未找到第 {next_page_num} 页按钮")
                         break
                         
                 except Exception as e:
