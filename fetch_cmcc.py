@@ -94,23 +94,42 @@ def fetch_cmcc():
             
             # 设置日期筛选为今天
             print(f"  设置日期筛选: {TODAY}")
+            date_set_success = False
             try:
-                # 尝试找到日期输入框并设置为今天
-                date_inputs = page.locator("input[placeholder*='日期'], input[type='text']").all()
+                # 尝试点击日期选择器打开日历，然后选择今天
+                date_inputs = page.locator("input[placeholder*='日期'], input[placeholder='请选择']").all()
                 if len(date_inputs) >= 2:
-                    # 通常是两个输入框：开始日期和结束日期
-                    date_inputs[0].fill(TODAY)
-                    date_inputs[1].fill(TODAY)
-                    print(f"    已设置日期范围: {TODAY} 至 {TODAY}")
+                    # 点击开始日期
+                    date_inputs[0].click()
+                    time.sleep(1)
+                    
+                    # 尝试点击"今天"按钮或选择今天的日期
+                    today_btn = page.locator("button:has-text('今天'), .ant-picker-today-btn, [title='今天']").first
+                    if today_btn:
+                        today_btn.click()
+                        time.sleep(0.5)
+                    
+                    # 点击结束日期
+                    date_inputs[1].click()
+                    time.sleep(1)
+                    
+                    today_btn = page.locator("button:has-text('今天'), .ant-picker-today-btn, [title='今天']").first
+                    if today_btn:
+                        today_btn.click()
+                        time.sleep(0.5)
                     
                     # 点击查询按钮
-                    search_btn = page.locator("button:has-text('查询'), button[type='submit']").first
+                    search_btn = page.locator("button:has-text('查询'), button[type='submit'], .search-btn").first
                     if search_btn:
                         search_btn.click()
                         time.sleep(3)
-                        print("    已点击查询")
+                        print(f"    ✅ 已设置日期筛选并查询")
+                        date_set_success = True
             except Exception as e:
-                print(f"    设置日期筛选失败（可能不需要）: {e}")
+                print(f"    ⚠️ 设置日期筛选失败: {e}")
+            
+            if not date_set_success:
+                print(f"    ℹ️ 使用默认日期筛选（页面默认即为今天）")
             
             # 开始翻页抓取
             page_num = 1
@@ -192,24 +211,36 @@ def fetch_cmcc():
                 
                 # 尝试翻到下一页
                 try:
+                    # 先滚动到底部，确保分页按钮可见
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(1)
+                    
                     # 查找下一页按钮
-                    next_btn = page.locator(".ant-pagination-next, button:has-text('下一页'), .pagination-next").first
+                    next_btn = page.locator(".ant-pagination-next").first
                     if next_btn:
-                        is_disabled = next_btn.is_disabled() if hasattr(next_btn, 'is_disabled') else False
+                        # 检查是否有 disabled 类
                         class_attr = next_btn.get_attribute("class") or ""
-                        if "disabled" in class_attr or is_disabled:
+                        if "disabled" in class_attr or "ant-pagination-disabled" in class_attr:
                             print(f"     已到最后一页")
                             break
                         
+                        # 点击下一页
                         next_btn.click()
                         time.sleep(3)
                         page_num += 1
                     else:
-                        print(f"     无翻页按钮，结束")
-                        break
+                        # 尝试其他分页按钮选择器
+                        next_btn = page.locator("button:has-text('下一页')").first
+                        if next_btn:
+                            next_btn.click()
+                            time.sleep(3)
+                            page_num += 1
+                        else:
+                            print(f"     无翻页按钮，结束")
+                            break
                         
                 except Exception as e:
-                    print(f"     翻页结束: {e}")
+                    print(f"     翻页结束: {str(e)[:50]}")
                     break
             
             print(f"\n  完成 {page_name}，共抓取 {len(results)} 条")
