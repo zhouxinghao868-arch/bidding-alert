@@ -1,7 +1,7 @@
 name: 招标信息监控
 
-# 状态: 已暂停 (由用户手动暂停，需要启动时请修改此文件)
-# 暂停时间: 2026-03-17
+# 状态: 已启动 (2026-03-27)
+# 关键词: 战略、量子
 
 on:
   schedule:
@@ -11,7 +11,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    if: false  # 已暂停 - 如需启动请删除此行或改为 if: true
+    if: true  # 已启动
     
     steps:
     - uses: actions/checkout@v4

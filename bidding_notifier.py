@@ -18,16 +18,13 @@ import requests
 from playwright.sync_api import sync_playwright, Page
 
 # 配置
-FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK", "https://open.feishu.cn/open-apis/bot/v2/hook/e2119cc2-1e80-4ce6-9a38-26543024915c")
+FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK", "https://open.feishu.cn/open-apis/bot/v2/hook/3f57d6e3-20d7-4511-bb85-695352fbd651")
 FETCH_HOURS = int(os.getenv("FETCH_HOURS", "48"))  # 抓取48小时内的公告
 PUSHED_RECORDS_FILE = "pushed_bids.json"
 
 # 关键词列表
 KEYWORDS = [
-    "系统集成", "硬件集成", "智算", "网络", "智算优化", "城域网", "承载网", 
-    "CMnet", "支撑", "边缘云", "数据网", "资源池", "网络云", "IPNET", 
-    "MDCN", "CDN", "路由器", "核心网", "5G", "SDN", "数据中心", "防火墙", 
-    "可视化", "大屏", "短信", "彩信", "短彩信", "内容管理", "短消息", "消息"
+    "战略", "量子"
 ]
 
 # 公告类型映射（只保留需要的6种类型）

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mclaw 手机养虾 Logo - 方案一</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 40px;
+            background: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+        .logo-item {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .label {
+            text-align: center;
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        .color-spec {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+        .color-row {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            gap: 15px;
+        }
+        .color-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .color-info {
+            flex: 1;
+        }
+        .color-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .color-code {
+            color: #888;
+            font-size: 14px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo-container">
+        <!-- 版本1: 圆角矩形背景 -->
+        <div>
+            <div class="logo-item">
+                <svg width="400" height="200" viewBox="0 0 400 200">
+                    <!-- 背景 -->
+                    <rect x="0" y="0" width="400" height="200" rx="20" fill="#1E3A5F"/>
+                    
+                    <!-- 信号波纹（暗示手机/智能） -->
+                    <g opacity="0.3">
+                        <path d="M320 60 Q340 70 350 85" stroke="#FF6B35" stroke-width="2" fill="none"/>
+                        <path d="M325 55 Q350 68 360 88" stroke="#FF6B35" stroke-width="2" fill="none"/>
+                        <path d="M330 50 Q360 66 370 90" stroke="#FF6B35" stroke-width="2" fill="none"/>
+                    </g>
+                    
+                    <!-- 虾图形 -->
+                    <g transform="translate(140, 75)">
+                        <!-- 虾身 -->
+                        <ellipse cx="25" cy="35" rx="22" ry="18" fill="#FF6B35"/>
+                        <ellipse cx="48" cy="30" rx="18" ry="14" fill="#FF7A45"/>
+                        <ellipse cx="68" cy="25" rx="14" ry="11" fill="#FF8A55"/>
+                        <!-- 虾头 -->
+                        <ellipse cx="85" cy="22" rx="10" ry="9" fill="#E63946"/>
+                        <!-- 虾眼 -->
+                        <circle cx="88" cy="19" r="3" fill="#1E3A5F"/>
+                        <circle cx="89" cy="18" r="1" fill="white"/>
+                        <!-- 虾须 -->
+                        <path d="M92 18 Q105 12 115 5" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <path d="M93 22 Q108 20 118 18" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <!-- 虾尾 -->
+                        <path d="M5 35 L-5 28 L-5 42 Z" fill="#E63946"/>
+                        <!-- 虾脚 -->
+                        <path d="M20 50 Q18 58 22 62" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <path d="M35 48 Q33 56 37 60" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <path d="M50 43 Q48 51 52 55" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    </g>
+                    
+                    <!-- Mclaw 文字 -->
+                    <text x="65" y="130" font-family="Arial Black, sans-serif" font-size="52" font-weight="900" fill="#FF6B35" letter-spacing="-2">M</text>
+                    <text x="110" y="130" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#FF6B35" letter-spacing="1">c</text>
+                    <text x="145" y="130" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#FF6B35" letter-spacing="1">l</text>
+                    <text x="165" y="130" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#FF6B35" letter-spacing="1">a</text>
+                    <text x="200" y="130" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#FF6B35" letter-spacing="1">w</text>
+                    
+                    <!-- 装饰圆点 -->
+                    <circle cx="178" cy="145" r="3" fill="#FFFFFF" opacity="0.8"/>
+                    
+                    <!-- 手机养虾 文字 -->
+                    <text x="200" y="168" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="500" fill="#FFFFFF" text-anchor="middle">手机养虾</text>
+                    
+                    <!-- 装饰圆点 -->
+                    <circle cx="265" cy="145" r="3" fill="#FFFFFF" opacity="0.8"/>
+                </svg>
+            </div>
+            <div class="label">版本一：圆角矩形背景</div>
+        </div>
+
+        <!-- 版本2: 圆形背景 -->
+        <div>
+            <div class="logo-item">
+                <svg width="300" height="300" viewBox="0 0 300 300">
+                    <!-- 圆形背景 -->
+                    <circle cx="150" cy="150" r="140" fill="#1E3A5F"/>
+                    
+                    <!-- 信号波纹 -->
+                    <g opacity="0.25">
+                        <path d="M230 80 Q250 95 260 115" stroke="#FF6B35" stroke-width="2.5" fill="none"/>
+                        <path d="M235 72 Q262 90 272 115" stroke="#FF6B35" stroke-width="2.5" fill="none"/>
+                        <path d="M240 65 Q275 85 285 115" stroke="#FF6B35" stroke-width="2.5" fill="none"/>
+                    </g>
+                    
+                    <!-- 虾图形（更大） -->
+                    <g transform="translate(75, 85)">
+                        <ellipse cx="35" cy="50" rx="32" ry="25" fill="#FF6B35"/>
+                        <ellipse cx="70" cy="42" rx="26" ry="20" fill="#FF7A45"/>
+                        <ellipse cx="100" cy="35" rx="20" ry="16" fill="#FF8A55"/>
+                        <ellipse cx="125" cy="30" rx="14" ry="12" fill="#E63946"/>
+                        <circle cx="129" cy="26" r="4" fill="#1E3A5F"/>
+                        <circle cx="130" cy="25" r="1.5" fill="white"/>
+                        <path d="M138 24 Q158 15 172 5" stroke="#FF6B35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                        <path d="M140 30 Q162 28 176 25" stroke="#FF6B35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                        <path d="M6 50 L-8 40 L-8 60 Z" fill="#E63946"/>
+                        <path d="M28 72 Q25 82 30 88" stroke="#FF6B35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                        <path d="M50 68 Q47 78 52 84" stroke="#FF6B35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                        <path d="M72 62 Q69 72 74 78" stroke="#FF6B35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                    </g>
+                    
+                    <!-- Mclaw -->
+                    <text x="85" y="215" font-family="Arial Black, sans-serif" font-size="38" font-weight="900" fill="#FF6B35" letter-spacing="-1">M</text>
+                    <text x="125" y="215" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#FF6B35">c</text>
+                    <text x="155" y="215" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#FF6B35">l</text>
+                    <text x="172" y="215" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#FF6B35">a</text>
+                    <text x="202" y="215" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#FF6B35">w</text>
+                    
+                    <!-- 装饰点 -->
+                    <circle cx="150" y="235" r="3" fill="#FFFFFF" opacity="0.7"/>
+                    
+                    <!-- 手机养虾 -->
+                    <text x="150" y="258" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="500" fill="#FFFFFF" text-anchor="middle">手机养虾</text>
+                </svg>
+            </div>
+            <div class="label">版本二：圆形背景（适合头像/图标）</div>
+        </div>
+
+        <!-- 版本3: 横版简洁 -->
+        <div>
+            <div class="logo-item">
+                <svg width="500" height="120" viewBox="0 0 500 120">
+                    <!-- 左侧图形区 -->
+                    <circle cx="60" cy="60" r="50" fill="#1E3A5F"/>
+                    
+                    <!-- 虾（简化版） -->
+                    <g transform="translate(28, 42)">
+                        <ellipse cx="18" cy="22" rx="16" ry="13" fill="#FF6B35"/>
+                        <ellipse cx="40" cy="18" rx="12" ry="10" fill="#FF7A45"/>
+                        <ellipse cx="58" cy="14" rx="9" ry="8" fill="#E63946"/>
+                        <circle cx="61" cy="12" r="2.5" fill="#1E3A5F"/>
+                        <circle cx="62" cy="11" r="1" fill="white"/>
+                        <path d="M66 10 Q78 4 86 0" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <path d="M67 15 Q80 13 88 11" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <path d="M3 22 L-6 16 L-6 28 Z" fill="#E63946"/>
+                    </g>
+                    
+                    <!-- Mclaw 大字 -->
+                    <text x="130" y="75" font-family="Arial Black, sans-serif" font-size="56" font-weight="900" fill="#1E3A5F" letter-spacing="-2">M</text>
+                    <text x="180" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#1E3A5F">c</text>
+                    <text x="215" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#1E3A5F">l</text>
+                    <text x="238" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#1E3A5F">a</text>
+                    <text x="275" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#1E3A5F">w</text>
+                    
+                    <!-- 分隔线 -->
+                    <line x1="330" y1="35" x2="330" y2="85" stroke="#FF6B35" stroke-width="3"/>
+                    
+                    <!-- 手机养虾 -->
+                    <text x="350" y="75" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="36" font-weight="600" fill="#FF6B35">手机养虾</text>
+                </svg>
+            </div>
+            <div class="label">版本三：横版简洁（适合网站/名片）</div>
+        </div>
+
+        <!-- 配色规范 -->
+        <div class="color-spec">
+            <h3 style="margin-top:0;color:#1E3A5F;">🎨 配色规范 - 方案一</h3>
+            <div class="color-row">
+                <div class="color-box" style="background:#1E3A5F;"></div>
+                <div class="color-info">
+                    <div class="color-name">深海蓝（背景）</div>
+                    <div class="color-code">#1E3A5F / RGB(30, 58, 95)</div>
+                </div>
+            </div>
+            <div class="color-row">
+                <div class="color-box" style="background:#FF6B35;"></div>
+                <div class="color-info">
+                    <div class="color-name">活力橙（主文字/图形）</div>
+                    <div class="color-code">#FF6B35 / RGB(255, 107, 53)</div>
+                </div>
+            </div>
+            <div class="color-row">
+                <div class="color-box" style="background:#E63946;"></div>
+                <div class="color-info">
+                    <div class="color-name">虾红（点缀）</div>
+                    <div class="color-code">#E63946 / RGB(230, 57, 70)</div>
+                </div>
+            </div>
+            <div class="color-row">
+                <div class="color-box" style="background:#FFFFFF;border:1px solid #ddd;"></div>
+                <div class="color-info">
+                    <div class="color-name">珍珠白（副标题）</div>
+                    <div class="color-code">#FFFFFF / RGB(255, 255, 255)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

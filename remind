@@ -1,0 +1,30 @@
+#!/bin/bash
+# simple-remind - 简单提醒工具
+# 用法: remind <时间> <消息>
+# 示例: remind "10 minutes" "开会"
+#       remind "2 hours" "提交报告"
+#       remind "tomorrow 9am" "晨会"
+
+REMIND_TIME="$1"
+shift
+MESSAGE="$*"
+
+if [ -z "$REMIND_TIME" ] || [ -z "$MESSAGE" ]; then
+    echo "用法: remind <时间> <消息>"
+    echo "示例:"
+    echo "  remind \"5 minutes\" \"喝水\""
+    echo "  remind \"1 hour\" \"开会\""
+    echo "  remind \"9:00 tomorrow\" \"晨会\""
+    exit 1
+fi
+
+# 使用 at 命令设置提醒
+echo "osascript -e 'display notification \"$MESSAGE\" with title \"⏰ 提醒\"'" | at "$REMIND_TIME" 2>/dev/null
+
+if [ $? -eq 0 ]; then
+    echo "✅ 已设置提醒: $MESSAGE"
+    echo "   时间: $REMIND_TIME"
+    echo "   使用 'atq' 查看待执行的提醒"
+else
+    echo "❌ 设置失败，请检查时间格式"
+fi
