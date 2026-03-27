@@ -70,9 +70,14 @@ def fetch_cmcc():
         
         try:
             page.goto(url, wait_until="networkidle", timeout=90000)
-            time.sleep(8)
+            time.sleep(10)
             
+            # 直接获取表格行，不等待特定选择器
             rows = page.locator("tr.ant-table-row").all()
+            if not rows:
+                # 尝试其他选择器
+                rows = page.locator("table tbody tr").all()
+            
             print(f"  找到 {len(rows)} 条记录")
             
             for row in rows:

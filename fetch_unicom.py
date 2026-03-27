@@ -35,12 +35,15 @@ def fetch_unicom():
     
     try:
         page.goto("https://www.chinaunicombidding.cn", wait_until="networkidle", timeout=90000)
-        time.sleep(8)
+        time.sleep(10)
         
-        # 等待内容加载
-        page.wait_for_selector("h5, .title", timeout=15000)
-        
+        # 不等待特定选择器，直接获取所有h5
         title_elements = page.query_selector_all("h5")
+        
+        if not title_elements:
+            # 尝试其他选择器
+            title_elements = page.query_selector_all(".title, .ant-list-item h5, [class*='title']")
+        
         print(f"  找到 {len(title_elements)} 条招标信息")
         
         for title_elem in title_elements:
