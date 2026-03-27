@@ -1,12 +1,11 @@
 name: 运营商招标信息整合监控
 
-# 状态: 已启动 (2026-03-27)
-# 关键词: 数智化、数据、算力、战略
-# 策略: 分别抓取 + 整合推送（移动/联通/电信）
+# 三大运营商招标抓取 + 飞书推送
+# 关键词: 数智化、数智、数据、算力、战略
 
 on:
   schedule:
-    - cron: '0 1-14 * * *'  # UTC 1-14点 = 北京时间 9-22点，每小时运行
+    - cron: '0 1-14 * * *'  # 北京时间 9-22点，每小时运行
   workflow_dispatch:
 
 jobs:
@@ -17,14 +16,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    
-    - name: 恢复去重记录
-      uses: actions/cache@v4
       with:
-        path: pushed_bids_combined.json
-        key: pushed-bids-combined-${{ github.run_id }}
-        restore-keys: |
-          pushed-bids-combined-
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: 设置Python环境
       uses: actions/setup-python@v5
@@ -52,3 +45,11 @@ jobs:
       env:
         FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
       run: python push_combined.py
+    
+    - name: 保存去重记录到仓库
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add pushed_bids_combined.json
+        git diff --staged --quiet || git commit -m "更新去重记录 $(date +'%Y-%m-%d %H:%M')"
+        git push || true
