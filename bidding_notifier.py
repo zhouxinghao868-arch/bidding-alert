@@ -24,7 +24,7 @@ PUSHED_RECORDS_FILE = "pushed_bids.json"
 
 # 关键词列表
 KEYWORDS = [
-    "战略", "量子"
+    "算力", "数据", "战略"
 ]
 
 # 公告类型映射（只保留需要的6种类型）
