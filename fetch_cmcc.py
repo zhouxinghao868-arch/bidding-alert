@@ -2,7 +2,7 @@
 """
 移动招标信息抓取 - 独立运行
 结果保存到 cmcc_bids.json
-优化：限定今天发布 + 翻页抓取
+优化：限定今天发布 + 翻页抓取 + 正确处理日期筛选
 """
 
 import json
@@ -17,7 +17,7 @@ from playwright.sync_api import sync_playwright
 
 OUTPUT_FILE = "cmcc_bids.json"
 KEYWORDS = ["数智化", "数据", "算力", "战略"]
-TODAY = datetime.now().strftime("%Y-%m-%d")  # 今天日期，如 2026-03-27
+TODAY = datetime.now().strftime("%Y-%m-%d")
 
 CMCC_BID_TYPE_MAP = {
     "CANDIDATE_PUBLICITY": "候选人公示",
@@ -50,7 +50,6 @@ def extract_province(text: str) -> str:
 
 
 def is_today(date_str: str) -> bool:
-    """检查日期是否为今天"""
     try:
         dt = date_parser.parse(date_str)
         return dt.strftime("%Y-%m-%d") == TODAY
@@ -81,82 +80,96 @@ def fetch_cmcc():
     ]
     
     for url, page_name in urls:
-        print(f"\n{'='*50}")
+        print(f"\n{'='*60}")
         print(f"正在访问: {page_name}")
-        print(f"{'='*50}")
+        print(f"{'='*60}")
         
         page = context.new_page()
         
         try:
             print("  正在加载页面...")
             page.goto(url, wait_until="load", timeout=90000)
-            time.sleep(5)
+            time.sleep(3)
             
-            # 设置日期筛选为今天
-            print(f"  设置日期筛选: {TODAY}")
-            date_set_success = False
+            # 尝试点击日期选择器设置为今天
+            print(f"  设置日期筛选为今天...")
             try:
-                # 尝试点击日期选择器打开日历，然后选择今天
-                date_inputs = page.locator("input[placeholder*='日期'], input[placeholder='请选择']").all()
+                # 找到日期输入框并点击
+                date_inputs = page.locator("input.ant-calendar-picker-input, input[placeholder*='日期'], input.cmcc-input").all()
                 if len(date_inputs) >= 2:
                     # 点击开始日期
                     date_inputs[0].click()
                     time.sleep(1)
                     
-                    # 尝试点击"今天"按钮或选择今天的日期
-                    today_btn = page.locator("button:has-text('今天'), .ant-picker-today-btn, [title='今天']").first
-                    if today_btn:
+                    # 尝试点击"今天"按钮
+                    today_btn = page.locator("a:has-text('今天'), .ant-calendar-today-btn, [class*='today']").first
+                    if today_btn.count() > 0:
                         today_btn.click()
                         time.sleep(0.5)
+                    else:
+                        # 如果没有今天按钮，点击确定
+                        ok_btn = page.locator("button:has-text('确定'), .ant-calendar-ok-btn").first
+                        if ok_btn.count() > 0:
+                            ok_btn.click()
+                    
+                    time.sleep(0.5)
                     
                     # 点击结束日期
                     date_inputs[1].click()
                     time.sleep(1)
                     
-                    today_btn = page.locator("button:has-text('今天'), .ant-picker-today-btn, [title='今天']").first
-                    if today_btn:
+                    today_btn = page.locator("a:has-text('今天'), .ant-calendar-today-btn, [class*='today']").first
+                    if today_btn.count() > 0:
                         today_btn.click()
-                        time.sleep(0.5)
+                    else:
+                        ok_btn = page.locator("button:has-text('确定'), .ant-calendar-ok-btn").first
+                        if ok_btn.count() > 0:
+                            ok_btn.click()
                     
-                    # 点击查询按钮
-                    search_btn = page.locator("button:has-text('查询'), button[type='submit'], .search-btn").first
-                    if search_btn:
-                        search_btn.click()
-                        time.sleep(3)
-                        print(f"    ✅ 已设置日期筛选并查询")
-                        date_set_success = True
+                    time.sleep(0.5)
+                    print(f"    ✅ 已设置日期为今天")
             except Exception as e:
-                print(f"    ⚠️ 设置日期筛选失败: {e}")
+                print(f"    ⚠️ 设置日期失败: {e}")
             
-            if not date_set_success:
-                print(f"    ℹ️ 使用默认日期筛选（页面默认即为今天）")
+            # 点击查询按钮
+            print("  点击查询按钮...")
+            try:
+                search_btn = page.locator("button:has-text('查询'), .search-btn, button[type='submit']").first
+                if search_btn.count() > 0:
+                    search_btn.click()
+                    time.sleep(3)
+                    print("    ✅ 已点击查询")
+                else:
+                    print("    ⚠️ 未找到查询按钮")
+            except Exception as e:
+                print(f"    ⚠️ 点击查询失败: {e}")
+            
+            # 等待表格刷新
+            time.sleep(3)
             
             # 开始翻页抓取
             page_num = 1
-            max_pages = 10  # 最多抓取10页
+            max_pages = 10
             
             while page_num <= max_pages:
                 print(f"\n  📄 正在处理第 {page_num} 页...")
                 
                 # 获取当前页的所有行
-                rows = page.locator("tr.ant-table-row").all()
-                if not rows:
-                    rows = page.locator("table tbody tr").all()
-                
+                rows = page.locator("tr.ant-table-row, table tbody tr").all()
                 print(f"     本页找到 {len(rows)} 条记录")
                 
-                # 调试：显示前3条记录的日期
+                # 调试：显示前几条记录
                 for idx, row in enumerate(rows[:3]):
                     try:
                         cells = row.locator("td").all()
                         if len(cells) >= 4:
                             d = cells[3].inner_text().strip()
-                            t = cells[2].inner_text().strip()[:30]
-                            print(f"       [{idx+1}] 日期:{d} | 标题:{t}...")
+                            t = cells[2].inner_text().strip()[:40]
+                            print(f"       [{idx+1}] 日期:{d} | {t}...")
                     except:
                         pass
                 
-                page_has_today = False  # 标记本页是否有今天的记录
+                page_has_today = False
                 
                 for row in rows:
                     try:
@@ -171,7 +184,7 @@ def fetch_cmcc():
                         
                         # 检查是否为今天发布
                         if not is_today(date_str):
-                            continue  # 跳过非今天的记录
+                            continue
                         
                         page_has_today = True
                         
@@ -215,46 +228,33 @@ def fetch_cmcc():
                     except Exception as e:
                         continue
                 
-                # 检查是否需要翻页
-                if not page_has_today:
-                    print(f"     本页无今天发布的记录，停止翻页")
-                    break
-                
                 # 尝试翻到下一页
                 try:
-                    # 先滚动到底部，确保分页按钮可见
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     time.sleep(1)
                     
-                    # 尝试找到并点击下一页按钮
+                    # 尝试多种方式翻页
                     clicked = False
                     
-                    # 方法1: 使用 ant-pagination-next
+                    # 方法1: 下一页按钮
                     try:
-                        next_btn = page.locator(".ant-pagination-next").first
+                        next_btn = page.locator("li.ant-pagination-next").first
                         if next_btn.count() > 0:
-                            next_btn.click(timeout=5000)
-                            clicked = True
+                            # 检查是否是最后一页
+                            class_attr = next_btn.get_attribute("class") or ""
+                            if "disabled" not in class_attr and "ant-pagination-disabled" not in class_attr:
+                                next_btn.click()
+                                clicked = True
                     except:
                         pass
                     
-                    # 方法2: 使用 li 包含下一页
+                    # 方法2: 页码+1
                     if not clicked:
                         try:
-                            next_btn = page.locator("li.ant-pagination-next").first
-                            if next_btn.count() > 0:
-                                next_btn.click(timeout=5000)
-                                clicked = True
-                        except:
-                            pass
-                    
-                    # 方法3: 使用 page number + 1
-                    if not clicked:
-                        try:
-                            next_page_num = page_num + 1
-                            page_btn = page.locator(f"li.ant-pagination-item[title='{next_page_num}']").first
+                            next_page = page_num + 1
+                            page_btn = page.locator(f"li.ant-pagination-item[title='{next_page}']").first
                             if page_btn.count() > 0:
-                                page_btn.click(timeout=5000)
+                                page_btn.click()
                                 clicked = True
                         except:
                             pass
@@ -263,14 +263,14 @@ def fetch_cmcc():
                         time.sleep(3)
                         page_num += 1
                     else:
-                        print(f"     已到最后一页或无下一页按钮")
+                        print(f"     已到最后一页")
                         break
                         
                 except Exception as e:
-                    print(f"     翻页结束: {str(e)[:50]}")
+                    print(f"     翻页结束: {e}")
                     break
             
-            print(f"\n  完成 {page_name}，共抓取 {len(results)} 条")
+            print(f"\n  完成 {page_name}")
                     
         except Exception as e:
             print(f"  抓取失败: {e}")
@@ -284,9 +284,9 @@ def fetch_cmcc():
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     
-    print(f"\n{'='*50}")
+    print(f"\n{'='*60}")
     print(f"✅ 移动招标抓取完成: {len(results)} 条")
-    print(f"{'='*50}")
+    print(f"{'='*60}")
     return len(results)
 
 
