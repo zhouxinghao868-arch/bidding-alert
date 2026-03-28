@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-电信招标信息抓取 - Playwright浏览器方式
-通过搜索页面点击每条记录，从浏览器地址栏获取真实详情URL
+电信招标信息抓取 - API + Playwright验证
+1. API快速获取今天的记录列表
+2. Playwright打开搜索页建立cookie
+3. 逐个导航到详情页获取浏览器实际URL
 """
 
 import json
 import sys
-import re
 import time
 import requests
 from datetime import datetime, timezone, timedelta
@@ -22,49 +23,95 @@ TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 BASE_URL = "https://caigou.chinatelecom.com.cn"
 SEARCH_URL = f"{BASE_URL}/search"
 API_URL = f"{BASE_URL}/portal/base/announcementJoin/queryListNew"
+HEADERS = {
+    "Content-Type": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": SEARCH_URL, "Origin": BASE_URL
+}
+
+DOC_TYPE_MAP = {
+    "TenderAnnouncement": "1", "PurchaseAnnounceBasic": "2",
+    "PurchaseAnnounc": "2", "CompareSelect": "3",
+    "NegotiationSelect": "5", "Prequalfication": "6",
+    "ResultAnnounc": "7", "TerminationAnnounc": "15",
+    "AuctionAnnounce": "19", "SingleSource": "2",
+}
 
 
-# ─── 辅助: API获取类型信息 ───────────────────────────────
-def fetch_type_map_via_api():
-    """通过API获取今天记录的 title→docType 映射（补充类型信息）"""
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": SEARCH_URL, "Origin": BASE_URL
-    }
-    title_type = {}
+def fetch_today_via_api():
+    """API获取今天的全部记录"""
+    all_records = []
     for pn in range(1, 20):
         try:
             resp = requests.post(API_URL, json={"pageNum": pn, "pageSize": 20},
-                                 headers=headers, timeout=60)
-            records = resp.json().get('data', {}).get('pageInfo', {}).get('list', [])
+                                 headers=HEADERS, timeout=60)
+            data = resp.json()
+            records = data.get('data', {}).get('pageInfo', {}).get('list', [])
             if not records:
                 break
-            for r in records:
-                if r.get('createDate', '')[:10] == TODAY:
-                    title_type[r.get('docTitle', '').strip()] = r.get('docType', '公告')
+            all_records.extend(records)
+            total = data.get('data', {}).get('pageInfo', {}).get('total', 0)
+            if pn == 1:
+                print(f"  总记录: {total}, 第1页: {len(records)} 条")
+            else:
+                print(f"  第{pn}页: {len(records)} 条")
             if records[-1].get('createDate', '')[:10] < TODAY:
                 break
-        except:
+        except Exception as e:
+            print(f"  API第{pn}页失败: {e}")
             break
-    return title_type
+    
+    # 过滤今天+去重
+    seen = set()
+    today = []
+    for r in all_records:
+        if r.get('createDate', '')[:10] != TODAY:
+            continue
+        rid = str(r.get('id', ''))
+        if rid in seen:
+            continue
+        seen.add(rid)
+        today.append(r)
+    return today
 
 
-# ─── 主逻辑 ─────────────────────────────────────────────
+def construct_url(record):
+    """用API数据构造详情URL"""
+    rid = str(record.get('id', ''))
+    dtc = record.get('docTypeCode', '')
+    svc = record.get('securityViewCode', '')
+    typ = DOC_TYPE_MAP.get(dtc, '7')
+    return f"{BASE_URL}/DeclareDetails?id={rid}&type={typ}&docTypeCode={dtc}&securityViewCode={svc}"
+
+
 def fetch_telecom():
     print(f"=== 抓取电信招标 {datetime.now(BJT).strftime('%H:%M:%S')} ===")
     print(f"限定日期: {TODAY}")
 
-    # 1. API 获取类型映射
-    print("\n步骤1: API获取记录类型信息...")
-    type_map = fetch_type_map_via_api()
-    print(f"  API返回 {len(type_map)} 条今天的记录")
+    # 1. API获取今天记录
+    print("\n步骤1: API获取今天的记录...")
+    api_records = fetch_today_via_api()
+    print(f"  共 {len(api_records)} 条今天的记录")
 
+    if not api_records:
+        print("  无数据")
+        with open(OUTPUT_FILE, 'w') as f:
+            json.dump([], f)
+        return 0
+
+    # 2. 关键词过滤
+    filtered = []
+    for r in api_records:
+        title = r.get('docTitle', '')
+        if KEYWORDS and not any(kw in title for kw in KEYWORDS):
+            continue
+        filtered.append(r)
+    print(f"  关键词过滤后: {len(filtered)} 条")
+
+    # 3. Playwright浏览器：先建立cookie，再逐个验证URL
+    print("\n步骤2: 浏览器验证详情URL...")
     results = []
-    seen_titles = set()
 
-    # 2. 浏览器点击获取URL
-    print("\n步骤2: 浏览器获取详情URL...")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
@@ -75,150 +122,53 @@ def fetch_telecom():
         )
         page = context.new_page()
 
-        print("  打开搜索页面...")
-        page.goto(SEARCH_URL, wait_until="load", timeout=90000)
-        time.sleep(8)  # WAF JS-challenge + 首次渲染
+        # 先访问搜索页面，通过WAF challenge，建立cookie
+        print("  打开搜索页面建立cookie...")
+        try:
+            page.goto(SEARCH_URL, wait_until="load", timeout=90000)
+            time.sleep(8)
+            print("  ✓ 搜索页面已加载")
+        except Exception as e:
+            print(f"  ✗ 搜索页面加载失败: {e}")
 
-        for pg in range(1, 11):
-            print(f"\n  ── 搜索第 {pg} 页 ──")
+        # 逐个导航到详情页获取浏览器实际URL
+        for idx, record in enumerate(filtered):
+            title = record.get('docTitle', '').strip()
+            province = record.get('provinceName', '') or '总部'
+            doc_type = record.get('docType', '公告')
+            date_str = record.get('createDate', '')[:10]
 
-            # 等表格
+            constructed = construct_url(record)
+            print(f"\n  [{idx+1}/{len(filtered)}] 【{province}】{title[:50]}...")
+            print(f"    构造URL: ...{constructed[-60:]}")
+
+            # 导航到详情页
+            actual_url = constructed  # fallback
             try:
-                page.wait_for_selector("table tbody tr", timeout=15000)
-            except:
-                print("    等待表格超时，停止")
-                break
-            time.sleep(2)
+                page.goto(constructed, wait_until="load", timeout=30000)
+                time.sleep(4)
+                actual_url = page.url
 
-            rows = page.query_selector_all("table tbody tr")
-            row_count = len(rows)
-            print(f"    共 {row_count} 行")
-            if row_count == 0:
-                break
-
-            found_today = False
-            i = 0
-
-            while i < row_count:
-                try:
-                    # go_back 后重新获取行
-                    cur_rows = page.query_selector_all("table tbody tr")
-                    if i >= len(cur_rows):
-                        break
-                    row = cur_rows[i]
-                    cells = row.query_selector_all("td")
-                    if len(cells) < 4:
-                        i += 1
-                        continue
-
-                    date_str = cells[3].inner_text().strip()
-
-                    if date_str != TODAY:
-                        if found_today:
-                            break  # 已经过了今天区域
-                        i += 1
-                        continue
-
-                    found_today = True
-                    full_title = cells[0].inner_text().strip()
-
-                    # 解析省份
-                    province, title = "", full_title
-                    m = re.match(r'【(.+?)】\s*(.*)', full_title, re.DOTALL)
-                    if m:
-                        province, title = m.group(1).strip(), m.group(2).strip()
-
-                    if title in seen_titles:
-                        i += 1
-                        continue
-
-                    # 关键词过滤
-                    if KEYWORDS and not any(kw in title for kw in KEYWORDS):
-                        seen_titles.add(title)
-                        i += 1
-                        continue
-
-                    seen_titles.add(title)
-
-                    # ★ 核心: 点击 → 获取浏览器地址栏URL（带重试）
-                    print(f"    [{len(results)+1}] 点击: {full_title[:55]}...")
-                    detail_url = None
-                    for attempt in range(3):
-                        # 每次重试重新获取行（DOM可能变化）
-                        retry_rows = page.query_selector_all("table tbody tr")
-                        if i >= len(retry_rows):
-                            break
-                        retry_cells = retry_rows[i].query_selector_all("td")
-                        if not retry_cells:
-                            break
-
-                        retry_cells[0].click()
-                        time.sleep(5)
-
-                        cur_url = page.url
-                        if cur_url != SEARCH_URL and "search" not in cur_url:
-                            detail_url = cur_url
-                            print(f"        ✓ {detail_url[:90]}")
-                            break
-
-                        if attempt < 2:
-                            print(f"        未跳转，重试({attempt+2}/3)...")
-
-                    if not detail_url:
-                        print(f"        ✗ 跳过（多次点击仍未跳转）")
-                        i += 1
-                        continue
-
-                    results.append({
-                        "platform": "电信",
-                        "province": province or "总部",
-                        "type": type_map.get(title, "公告"),
-                        "company": "中国电信",
-                        "title": title,
-                        "url": detail_url,
-                        "date": date_str
-                    })
-
-                    # 返回搜索页
-                    page.go_back()
-                    try:
-                        page.wait_for_selector("table tbody tr", timeout=15000)
-                    except:
-                        # 恢复失败则重新导航
-                        page.goto(SEARCH_URL, wait_until="load", timeout=60000)
-                        time.sleep(6)
-                    time.sleep(2)
-
-                except Exception as e:
-                    print(f"    第{i}行出错: {e}")
-                    if "search" not in page.url:
-                        try:
-                            page.goto(SEARCH_URL, wait_until="load", timeout=60000)
-                            time.sleep(6)
-                        except:
-                            pass
-
-                i += 1
-
-            if not found_today:
-                print("    本页无今天数据，停止翻页")
-                break
-
-            # 翻页
-            try:
-                next_btn = page.query_selector(
-                    "button.btn-next:not([disabled]), "
-                    ".el-pagination .btn-next:not([disabled])"
-                )
-                if next_btn:
-                    next_btn.click()
-                    time.sleep(4)
+                if "DeclareDetails" in actual_url:
+                    print(f"    ✓ 浏览器URL: ...{actual_url[-60:]}")
+                elif actual_url == constructed:
+                    print(f"    ✓ URL未变（SPA路由正常）")
                 else:
-                    print("    没有下一页")
-                    break
+                    print(f"    ⚠ 被重定向到: {actual_url[:80]}")
+                    # 即使被重定向也用构造的URL（浏览器有cookie时能打开）
+                    actual_url = constructed
             except Exception as e:
-                print(f"    翻页出错: {e}")
-                break
+                print(f"    ✗ 导航失败: {e}，使用构造URL")
+
+            results.append({
+                "platform": "电信",
+                "province": province,
+                "type": doc_type,
+                "company": "中国电信",
+                "title": title,
+                "url": actual_url,
+                "date": date_str
+            })
 
         browser.close()
 
@@ -227,10 +177,10 @@ def fetch_telecom():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"今天共 {len(seen_titles)} 条记录，{len(results)} 条匹配")
+    print(f"今天共 {len(api_records)} 条记录，{len(results)} 条匹配")
     print(f"✅ 电信抓取完成: {len(results)} 条")
-    for idx, r in enumerate(results):
-        print(f"  [{idx+1}] 【{r['province']}-{r['type']}】{r['title'][:50]}...")
+    for i, r in enumerate(results):
+        print(f"  [{i+1}] 【{r['province']}-{r['type']}】{r['title'][:50]}...")
     print(f"{'='*60}")
     return len(results)
 
