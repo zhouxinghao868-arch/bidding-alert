@@ -19,6 +19,15 @@ KEYWORDS = []  # 不做关键词过滤，抓取所有当天记录
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
+# 招标采购公告的5个子分类
+BIDDING_TABS = [
+    "采购公告",
+    "资格预审公告",
+    "候选人公示",
+    "中选结果公示",
+    "直接采购公告",
+]
+
 # 采购服务的6个子分类
 PROCUREMENT_SERVICE_TABS = [
     "信息核查公告",
@@ -189,17 +198,46 @@ def fetch_cmcc():
 
     all_results = []
 
-    # ========== 第一个网页：招标采购公告 ==========
+    # ========== 第一个网页：招标采购公告（5个子分类） ==========
     print(f"\n{'='*60}")
-    print(f"开始抓取: 招标采购公告")
+    print(f"开始抓取: 招标采购公告 (共{len(BIDDING_TABS)}个子分类)")
     print(f"{'='*60}")
+
     try:
         page.goto("https://b2b.10086.cn/#/biddingProcurementBulletin", wait_until="load", timeout=90000)
         time.sleep(5)
-        results = scrape_current_table(page, context, "招标采购公告")
-        all_results.extend(results)
+
+        for tab_name in BIDDING_TABS:
+            print(f"\n  --- 切换到子分类: {tab_name} ---")
+
+            if click_left_nav_tab(page, tab_name):
+                print(f"  ✓ 已切换到 [{tab_name}]")
+                time.sleep(2)
+
+                rows = page.locator(".cmcc-table-row").all()
+                if len(rows) == 0:
+                    print(f"  {tab_name}: 无数据，跳过")
+                    continue
+
+                first_date = ""
+                try:
+                    first_cells = rows[0].locator("td").all()
+                    if len(first_cells) >= 4:
+                        first_date = first_cells[3].inner_text().strip()
+                except:
+                    pass
+
+                if first_date and first_date < TODAY:
+                    print(f"  {tab_name}: 最新记录日期 {first_date}，无今天数据，跳过")
+                    continue
+
+                results = scrape_current_table(page, context, tab_name)
+                all_results.extend(results)
+            else:
+                print(f"  ✗ 无法切换到 [{tab_name}]，跳过")
+
     except Exception as e:
-        print(f"  错误: {e}")
+        print(f"  招标采购公告错误: {e}")
 
     # ========== 第二个网页：采购服务（6个子分类） ==========
     print(f"\n{'='*60}")
