@@ -9,8 +9,25 @@
 import json
 import sys
 import time
+import random
 from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
+
+# UA轮换池
+UA_LIST = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
+
+def rand_sleep(lo=2, hi=5):
+    """随机延迟"""
+    t = random.uniform(lo, hi)
+    time.sleep(t)
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -43,12 +60,12 @@ def get_detail_url(context, row):
     try:
         pages_before = len(context.pages)
         row.click()
-        time.sleep(3)
+        rand_sleep(2, 4)
         if len(context.pages) > pages_before:
             new_page = context.pages[-1]
             url = new_page.url
             new_page.close()
-            time.sleep(1)
+            rand_sleep(1, 2)
             return url
     except:
         pass
@@ -62,7 +79,7 @@ def scrape_current_table(page, context, name):
 
     while page_num <= max_pages:
         print(f"\n  第 {page_num} 页:")
-        time.sleep(3)
+        rand_sleep(2, 4)
 
         rows = page.locator(".cmcc-table-row").all()
         print(f"    找到 {len(rows)} 条记录")
@@ -132,17 +149,17 @@ def scrape_current_table(page, context, name):
         # 翻页
         try:
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(2)
+            rand_sleep(2, 4)
             next_btn = page.locator(f".cmcc-page-item[title='{page_num + 1}']").first
             if next_btn.count() > 0:
                 next_btn.click()
-                time.sleep(3)
+                rand_sleep(2, 4)
                 page_num += 1
             else:
                 next_arrow = page.locator(".cmcc-page-next").first
                 if next_arrow.count() > 0 and "cmcc-page-disabled" not in (next_arrow.get_attribute("class") or ""):
                     next_arrow.click()
-                    time.sleep(3)
+                    rand_sleep(2, 4)
                     page_num += 1
                 else:
                     print(f"    已到最后一页")
@@ -161,7 +178,7 @@ def click_left_nav_tab(page, tab_name):
         tab = page.locator(f"div.left >> text='{tab_name}'").first
         if tab.count() > 0:
             tab.click()
-            time.sleep(3)
+            rand_sleep(2, 4)
             return True
     except:
         pass
@@ -179,7 +196,7 @@ def click_left_nav_tab(page, tab_name):
             return false;
         }}""")
         if clicked:
-            time.sleep(3)
+            rand_sleep(2, 4)
             return True
     except:
         pass
@@ -193,7 +210,9 @@ def fetch_cmcc():
 
     playwright = sync_playwright().start()
     browser = playwright.chromium.launch(headless=True)
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+    ua = random.choice(UA_LIST)
+    print(f"UA: {ua[:50]}...")
+    context = browser.new_context(viewport={"width": 1920, "height": 1080}, user_agent=ua)
     page = context.new_page()
 
     all_results = []
@@ -205,14 +224,14 @@ def fetch_cmcc():
 
     try:
         page.goto("https://b2b.10086.cn/#/biddingProcurementBulletin", wait_until="load", timeout=90000)
-        time.sleep(5)
+        rand_sleep(4, 7)
 
         for tab_name in BIDDING_TABS:
             print(f"\n  --- 切换到子分类: {tab_name} ---")
 
             if click_left_nav_tab(page, tab_name):
                 print(f"  ✓ 已切换到 [{tab_name}]")
-                time.sleep(2)
+                rand_sleep(2, 4)
 
                 rows = page.locator(".cmcc-table-row").all()
                 if len(rows) == 0:
@@ -246,14 +265,14 @@ def fetch_cmcc():
 
     try:
         page.goto("https://b2b.10086.cn/#/procurementServices", wait_until="load", timeout=90000)
-        time.sleep(5)
+        rand_sleep(4, 7)
 
         for tab_name in PROCUREMENT_SERVICE_TABS:
             print(f"\n  --- 切换到子分类: {tab_name} ---")
 
             if click_left_nav_tab(page, tab_name):
                 print(f"  ✓ 已切换到 [{tab_name}]")
-                time.sleep(2)
+                rand_sleep(2, 4)
 
                 # 检查表格是否有数据
                 rows = page.locator(".cmcc-table-row").all()
