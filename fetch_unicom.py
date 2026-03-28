@@ -23,6 +23,7 @@ def fetch_unicom():
     print(f"关键词: {' | '.join(KEYWORDS)}")
     
     results = []
+    errors = []
     seen_ids = set()
     all_records = []
     
@@ -131,6 +132,7 @@ def fetch_unicom():
         
     except Exception as e:
         print(f"错误: {e}")
+        errors.append(str(e))
         import traceback
         traceback.print_exc()
     finally:
@@ -140,6 +142,9 @@ def fetch_unicom():
     
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+
+    with open("unicom_status.json", 'w', encoding='utf-8') as f:
+        json.dump({"errors": errors, "count": len(results)}, f, ensure_ascii=False)
     
     print(f"\n{'='*60}")
     print(f"✅ 联通抓取完成: {len(results)} 条匹配关键词的记录")

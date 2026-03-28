@@ -213,16 +213,22 @@ def main():
     print(f"  联通: {len(unicom_bids)} 条")
     print(f"  电信: {len(telecom_bids)} 条")
     
-    # 抓取0条告警（每天都检查）
+    # 检查抓取错误（读取各脚本的状态文件）
     problems = []
-    if len(cmcc_bids) == 0:
-        problems.append("移动抓取0条 — 可能被反爬拦截或页面结构变化")
-    if len(unicom_bids) == 0:
-        problems.append("联通抓取0条 — 可能API接口变更或网站改版")
-    if len(telecom_bids) == 0:
-        problems.append("电信抓取0条 — 可能API接口变更或返回异常")
+    for name, label in [("cmcc", "移动"), ("unicom", "联通"), ("telecom", "电信")]:
+        status_file = f"{name}_status.json"
+        try:
+            with open(status_file, 'r', encoding='utf-8') as f:
+                status = json.load(f)
+                for err in status.get("errors", []):
+                    problems.append(f"{label}: {err}")
+        except FileNotFoundError:
+            problems.append(f"{label}: 状态文件缺失（脚本可能未运行或崩溃）")
+        except Exception as e:
+            problems.append(f"{label}: 状态文件读取异常 ({e})")
+    
     if problems:
-        print(f"\n⚠️ 异常检测: {len(problems)}项")
+        print(f"\n⚠️ 检测到 {len(problems)} 项错误")
         send_alert(problems)
     
     send_combined_message(cmcc_bids, unicom_bids, telecom_bids)

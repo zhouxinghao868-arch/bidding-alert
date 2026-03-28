@@ -216,6 +216,7 @@ def fetch_cmcc():
     page = context.new_page()
 
     all_results = []
+    errors = []
 
     # ========== 第一个网页：招标采购公告（5个子分类） ==========
     print(f"\n{'='*60}")
@@ -257,6 +258,7 @@ def fetch_cmcc():
 
     except Exception as e:
         print(f"  招标采购公告错误: {e}")
+        errors.append(f"招标采购公告: {e}")
 
     # ========== 第二个网页：采购服务（6个子分类） ==========
     print(f"\n{'='*60}")
@@ -300,6 +302,7 @@ def fetch_cmcc():
 
     except Exception as e:
         print(f"  采购服务错误: {e}")
+        errors.append(f"采购服务: {e}")
 
     page.close()
     browser.close()
@@ -307,6 +310,10 @@ def fetch_cmcc():
 
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
+
+    # 写状态文件（供push_combined.py检查告警）
+    with open("cmcc_status.json", 'w', encoding='utf-8') as f:
+        json.dump({"errors": errors, "count": len(all_results)}, f, ensure_ascii=False)
 
     print(f"\n{'='*60}")
     print(f"✅ 全部完成: {len(all_results)} 条匹配关键词的记录")

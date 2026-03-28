@@ -68,9 +68,12 @@ def fetch_telecom():
     print(f"关键词: {'无过滤' if not KEYWORDS else ' | '.join(KEYWORDS)}")
 
     results = []
+    errors = []
     seen_ids = set()
 
     records, total = fetch_page(1, 20)
+    if not records and total == 0:
+        errors.append("API请求失败，无法获取数据")
     print(f"总记录: {total}, 第1页: {len(records)} 条")
 
     all_records = list(records)
@@ -132,6 +135,9 @@ def fetch_telecom():
 
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+
+    with open("telecom_status.json", 'w', encoding='utf-8') as f:
+        json.dump({"errors": errors, "count": len(results)}, f, ensure_ascii=False)
 
     return len(results)
 
