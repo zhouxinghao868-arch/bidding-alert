@@ -78,14 +78,20 @@ def fetch_telecom():
 
     all_records = list(records)
     page_num = 1
+    empty_streak = 0  # 连续无今天数据的页数
 
-    while page_num < 20:
-        # 翻页策略：继续翻直到整页都没有今天的记录
+    while page_num < 30:
+        # 翻页策略：连续3页无今天数据才停止
         # （电信API不严格按日期排序，今天的数据可能散在多页）
         last_page_records = all_records[-20:] if len(all_records) >= 20 else all_records
         today_in_last_page = sum(1 for r in last_page_records if r.get('createDate', '')[:10] == TODAY)
         if today_in_last_page == 0:
-            print(f"上一页无今天数据，停止翻页")
+            empty_streak += 1
+            if empty_streak >= 3:
+                print(f"连续{empty_streak}页无今天数据，停止翻页")
+                break
+        else:
+            empty_streak = 0
             break
 
         page_num += 1
