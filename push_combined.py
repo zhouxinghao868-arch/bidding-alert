@@ -106,76 +106,39 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
         print("\n没有新消息需要推送")
         return True
     
-    lines = [
-        "📢 运营商招标信息汇总",
-        f"📅 {now_bjt().strftime('%Y-%m-%d %H:%M')}",
-        f"📊 共找到 {total} 条新公告",
-        f"   中国移动: {len(cmcc_new)}条 | 中国联通: {len(unicom_new)}条 | 中国电信: {len(telecom_new)}条"
-    ]
+    # 使用飞书富文本格式（post），确保URL作为超链接完整传递
+    content_lines = []  # 飞书post格式的content数组
     
-    # 类型统计
-    all_bids = cmcc_new + unicom_new + telecom_new
-    type_stats = {}
-    for bid in all_bids:
-        key = f"{bid['platform']}-{bid['type']}"
-        type_stats[key] = type_stats.get(key, 0) + 1
+    # 标题统计行
+    content_lines.append([{"tag": "text", "text": f"📅 {now_bjt().strftime('%Y-%m-%d %H:%M')}\n📊 共 {total} 条新公告（移动{len(cmcc_new)} | 联通{len(unicom_new)} | 电信{len(telecom_new)}）"}])
+    content_lines.append([{"tag": "text", "text": ""}])
     
-    if type_stats:
-        stats_str = " | ".join([f"{k}:{v}" for k, v in sorted(type_stats.items())])
-        lines.append(f"📋 {stats_str}")
-    lines.append("")
+    def add_section(bids, emoji, platform_name):
+        if not bids:
+            return
+        content_lines.append([{"tag": "text", "text": f"{'─'*18}\n{emoji} {platform_name}招标信息\n{'─'*18}"}])
+        content_lines.append([{"tag": "text", "text": ""}])
+        for i, bid in enumerate(bids, 1):
+            content_lines.append([{"tag": "text", "text": f"【{bid['province']}-{bid['type']}-{i}】\n日期：{bid['date']}\n标题：{bid['title']}"}])
+            content_lines.append([{"tag": "text", "text": "链接："}, {"tag": "a", "text": "点击查看详情", "href": bid['url']}])
+            content_lines.append([{"tag": "text", "text": ""}])
     
-    # 中国移动部分
-    if cmcc_new:
-        lines.append("─" * 18)
-        lines.append("📱 中国移动招标信息")
-        lines.append("─" * 18)
-        lines.append("")
-        
-        for i, bid in enumerate(cmcc_new, 1):
-            lines.append(f"【{bid['province']}-{bid['type']}-{i}】")
-            lines.append(f"日期：{bid['date']}")
-            lines.append(f"标题：{bid['title']}")
-            lines.append(f"链接：{bid['url']}")
-            lines.append("")
+    add_section(cmcc_new, "📱", "中国移动")
+    add_section(unicom_new, "🌐", "中国联通")
+    add_section(telecom_new, "📞", "中国电信")
     
-    # 中国联通部分
-    if unicom_new:
-        lines.append("─" * 18)
-        lines.append("🌐 中国联通招标信息")
-        lines.append("─" * 18)
-        lines.append("")
-        
-        for i, bid in enumerate(unicom_new, 1):
-            lines.append(f"【{bid['province']}-{bid['type']}-{i}】")
-            lines.append(f"日期：{bid['date']}")
-            lines.append(f"标题：{bid['title']}")
-            lines.append(f"链接：{bid['url']}")
-            lines.append("")
-    
-    # 中国电信部分
-    if telecom_new:
-        lines.append("─" * 18)
-        lines.append("📞 中国电信招标信息")
-        lines.append("─" * 18)
-        lines.append("")
-        
-        for i, bid in enumerate(telecom_new, 1):
-            lines.append(f"【{bid['province']}-{bid['type']}-{i}】")
-            lines.append(f"日期：{bid['date']}")
-            lines.append(f"标题：{bid['title']}")
-            lines.append(f"链接：{bid['url']}")
-            lines.append("")
-    
-    lines.append("─" * 18)
-    lines.append(f"数据来源: 中国移动采购与招标网 | 中国联通采购与招标网 | 中国电信阳光采购网")
-    lines.append(f"关键词: {' | '.join(KEYWORDS)} | 更新时间: {now_bjt().strftime('%H:%M')}")
-    
-    message = "\n".join(lines)
+    content_lines.append([{"tag": "text", "text": f"{'─'*18}\n来源: 移动·联通·电信采购网 | 更新: {now_bjt().strftime('%H:%M')}"}])
     
     payload = {
-        "msg_type": "text",
-        "content": {"text": message}
+        "msg_type": "post",
+        "content": {
+            "post": {
+                "zh_cn": {
+                    "title": f"📢 运营商招标信息汇总（{total}条）",
+                    "content": content_lines
+                }
+            }
+        }
     }
     
     try:
