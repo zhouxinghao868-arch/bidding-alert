@@ -140,17 +140,34 @@ def fetch_telecom():
 
                     seen_titles.add(title)
 
-                    # ★ 核心: 点击 → 获取浏览器地址栏URL
+                    # ★ 核心: 点击 → 获取浏览器地址栏URL（带重试）
                     print(f"    [{len(results)+1}] 点击: {full_title[:55]}...")
-                    cells[0].click()
-                    time.sleep(4)
+                    detail_url = None
+                    for attempt in range(3):
+                        # 每次重试重新获取行（DOM可能变化）
+                        retry_rows = page.query_selector_all("table tbody tr")
+                        if i >= len(retry_rows):
+                            break
+                        retry_cells = retry_rows[i].query_selector_all("td")
+                        if not retry_cells:
+                            break
 
-                    detail_url = page.url
+                        retry_cells[0].click()
+                        time.sleep(5)
 
-                    if "DeclareDetails" in detail_url or detail_url != SEARCH_URL:
-                        print(f"        ✓ {detail_url[:90]}")
-                    else:
-                        print(f"        ✗ 未跳转: {detail_url}")
+                        cur_url = page.url
+                        if cur_url != SEARCH_URL and "search" not in cur_url:
+                            detail_url = cur_url
+                            print(f"        ✓ {detail_url[:90]}")
+                            break
+
+                        if attempt < 2:
+                            print(f"        未跳转，重试({attempt+2}/3)...")
+
+                    if not detail_url:
+                        print(f"        ✗ 跳过（多次点击仍未跳转）")
+                        i += 1
+                        continue
 
                     results.append({
                         "platform": "电信",
