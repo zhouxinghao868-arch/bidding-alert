@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "telecom_bids.json"
-KEYWORDS = ["数智化", "数智", "数据", "算力", "战略"]
+KEYWORDS = []  # 不做关键词过滤，抓取所有当天记录
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
@@ -113,7 +113,7 @@ def fetch_telecom():
             today_count += 1
             
             # 关键词匹配
-            if not any(kw in title for kw in KEYWORDS):
+            if KEYWORDS and not any(kw in title for kw in KEYWORDS):
                 continue
             
             print(f"  [✓] {province} | {doc_type} | {title[:50]}...")

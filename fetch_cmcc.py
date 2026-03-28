@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "cmcc_bids.json"
-KEYWORDS = ["数智化", "数智", "数据", "算力", "战略"]
+KEYWORDS = []  # 不做关键词过滤，抓取所有当天记录
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
@@ -85,7 +85,7 @@ def scrape_current_table(page, context, name):
                     continue
                 page_has_today = True
 
-                if any(kw in title for kw in KEYWORDS):
+                if not KEYWORDS or any(kw in title for kw in KEYWORDS):
                     matched_indices.append((i, company, bid_type, title, date_str))
                     print(f"    [✓] {company} | {title[:50]}...")
             except:
