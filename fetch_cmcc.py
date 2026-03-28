@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-移动招标信息抓取 - 翻页 + URL获取
-只抓当天数据，翻页上限30页，基于日期判断停止
+移动招标信息抓取 - 两个网页完整抓取
+1. 招标采购公告 (biddingProcurementBulletin) - 直接抓取
+2. 采购服务 (procurementServices) - 6个子分类逐个切换抓取
+   信息核查公告/信息核查结果公示/采购意见征求公告/测试公告/招募甄选合作公告/招募甄选合作结果公告
 """
 
 import json
@@ -17,13 +19,22 @@ KEYWORDS = ["数智化", "数智", "数据", "算力", "战略"]
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
+# 采购服务的6个子分类
+PROCUREMENT_SERVICE_TABS = [
+    "信息核查公告",
+    "信息核查结果公示",
+    "采购意见征求公告",
+    "测试公告",
+    "招募甄选合作公告",
+    "招募甄选合作结果公告",
+]
+
 def get_detail_url(context, row):
     """点击行获取详情页URL"""
     try:
         pages_before = len(context.pages)
         row.click()
         time.sleep(3)
-        
         if len(context.pages) > pages_before:
             new_page = context.pages[-1]
             url = new_page.url
@@ -34,170 +45,220 @@ def get_detail_url(context, row):
         pass
     return ""
 
-def fetch_section(page, context, url, name):
-    """抓取一个板块的所有当天记录"""
-    print(f"\n{'='*60}")
-    print(f"开始抓取: {name}")
-    print(f"目标日期: {TODAY}")
-    print(f"{'='*60}")
-    
+def scrape_current_table(page, context, name):
+    """抓取当前表格中所有当天匹配关键词的记录（含翻页）"""
     results = []
-    
-    try:
-        page.goto(url, wait_until="load", timeout=90000)
-        time.sleep(5)
-        
-        page_num = 1
-        max_pages = 30  # 覆盖工作日高峰（30页=600条）
-        
-        while page_num <= max_pages:
-            print(f"\n  第 {page_num} 页:")
-            time.sleep(3)
-            
-            rows = page.locator(".cmcc-table-row").all()
-            print(f"    找到 {len(rows)} 条记录")
-            
-            if len(rows) == 0:
-                print(f"    空页，停止")
-                break
-            
-            page_has_today = False
-            matched_indices = []
-            earliest_date_on_page = None
-            
-            # 第一遍：扫描所有行，找出匹配的
-            for i, row in enumerate(rows):
-                try:
-                    cells = row.locator("td").all()
-                    if len(cells) < 4:
-                        continue
-                    
-                    company = cells[0].inner_text().strip()
-                    bid_type = cells[1].inner_text().strip()
-                    title = cells[2].inner_text().strip()
-                    # 去掉标题中的 "NEW " 前缀
-                    if title.startswith("NEW "):
-                        title = title[4:]
-                    date_str = cells[3].inner_text().strip()
-                    
-                    # 记录本页最早日期
-                    if earliest_date_on_page is None or date_str < earliest_date_on_page:
-                        earliest_date_on_page = date_str
-                    
-                    # 只抓当天数据
-                    if date_str != TODAY:
-                        continue
-                    
-                    page_has_today = True
-                    
-                    if any(kw in title for kw in KEYWORDS):
-                        matched_indices.append((i, company, bid_type, title, date_str))
-                        print(f"    [✓] {company} | {title[:50]}...")
-                    
-                except:
-                    continue
-            
-            # 停止条件：本页最早日期已早于今天（数据按日期降序排列）
-            if earliest_date_on_page and earliest_date_on_page < TODAY:
-                if not page_has_today:
-                    # 整页都不是今天的，直接停
-                    print(f"    本页无今天记录 (最早: {earliest_date_on_page})，停止")
-                    break
-                else:
-                    # 本页有部分今天的，处理完后翻页看下一页是否还有
-                    pass
-            
-            # 第二遍：对匹配的行点击获取URL
-            for idx, company, bid_type, title, date_str in matched_indices:
-                print(f"    → 获取URL: {title[:40]}...")
-                rows = page.locator(".cmcc-table-row").all()
-                if idx < len(rows):
-                    detail_url = get_detail_url(context, rows[idx])
-                    print(f"      URL: {detail_url[:80]}..." if detail_url else "      URL: 获取失败")
-                else:
-                    detail_url = ""
-                
-                results.append({
-                    "platform": "移动",
-                    "province": company,
-                    "type": bid_type,
-                    "company": company,
-                    "title": title,
-                    "url": detail_url or "https://b2b.10086.cn",
-                    "date": date_str
-                })
-            
-            # 如果本页最早日期已早于今天，说明后面不会再有今天的数据了
-            if earliest_date_on_page and earliest_date_on_page < TODAY:
-                print(f"    本页已出现旧日期 ({earliest_date_on_page})，后续无今天数据，停止")
-                break
-            
-            # 翻页
+    page_num = 1
+    max_pages = 30
+
+    while page_num <= max_pages:
+        print(f"\n  第 {page_num} 页:")
+        time.sleep(3)
+
+        rows = page.locator(".cmcc-table-row").all()
+        print(f"    找到 {len(rows)} 条记录")
+
+        if len(rows) == 0:
+            print(f"    空页，停止")
+            break
+
+        page_has_today = False
+        matched_indices = []
+        earliest_date_on_page = None
+
+        for i, row in enumerate(rows):
             try:
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(2)
-                
-                next_btn = page.locator(f".cmcc-page-item[title='{page_num + 1}']").first
-                if next_btn.count() > 0:
-                    next_btn.click()
+                cells = row.locator("td").all()
+                if len(cells) < 4:
+                    continue
+                company = cells[0].inner_text().strip()
+                bid_type = cells[1].inner_text().strip()
+                title = cells[2].inner_text().strip()
+                if title.startswith("NEW "):
+                    title = title[4:]
+                date_str = cells[3].inner_text().strip()
+
+                if earliest_date_on_page is None or date_str < earliest_date_on_page:
+                    earliest_date_on_page = date_str
+
+                if date_str != TODAY:
+                    continue
+                page_has_today = True
+
+                if any(kw in title for kw in KEYWORDS):
+                    matched_indices.append((i, company, bid_type, title, date_str))
+                    print(f"    [✓] {company} | {title[:50]}...")
+            except:
+                continue
+
+        # 停止条件
+        if earliest_date_on_page and earliest_date_on_page < TODAY:
+            if not page_has_today:
+                print(f"    本页无今天记录 (最早: {earliest_date_on_page})，停止")
+                break
+
+        # 获取URL
+        for idx, company, bid_type, title, date_str in matched_indices:
+            print(f"    → 获取URL: {title[:40]}...")
+            rows = page.locator(".cmcc-table-row").all()
+            if idx < len(rows):
+                detail_url = get_detail_url(context, rows[idx])
+                print(f"      URL: {detail_url[:80]}..." if detail_url else "      URL: 获取失败")
+            else:
+                detail_url = ""
+            results.append({
+                "platform": "移动",
+                "province": company,
+                "type": bid_type,
+                "company": company,
+                "title": title,
+                "url": detail_url or "https://b2b.10086.cn",
+                "date": date_str
+            })
+
+        if earliest_date_on_page and earliest_date_on_page < TODAY:
+            print(f"    本页已出现旧日期 ({earliest_date_on_page})，停止")
+            break
+
+        # 翻页
+        try:
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(2)
+            next_btn = page.locator(f".cmcc-page-item[title='{page_num + 1}']").first
+            if next_btn.count() > 0:
+                next_btn.click()
+                time.sleep(3)
+                page_num += 1
+            else:
+                next_arrow = page.locator(".cmcc-page-next").first
+                if next_arrow.count() > 0 and "cmcc-page-disabled" not in (next_arrow.get_attribute("class") or ""):
+                    next_arrow.click()
                     time.sleep(3)
                     page_num += 1
                 else:
-                    # 尝试点击"下一页"按钮
-                    next_arrow = page.locator(".cmcc-page-next").first
-                    if next_arrow.count() > 0 and "cmcc-page-disabled" not in (next_arrow.get_attribute("class") or ""):
-                        next_arrow.click()
-                        time.sleep(3)
-                        page_num += 1
-                    else:
-                        print(f"    已到最后一页")
-                        break
-            except Exception as e:
-                print(f"    翻页异常: {e}")
-                break
-        
-    except Exception as e:
-        print(f"  错误: {e}")
-    
-    print(f"\n  {name} 完成: {len(results)} 条匹配 (翻了{page_num}页)")
+                    print(f"    已到最后一页")
+                    break
+        except Exception as e:
+            print(f"    翻页异常: {e}")
+            break
+
+    print(f"  {name} 完成: {len(results)} 条匹配 (翻了{page_num}页)")
     return results
+
+def click_left_nav_tab(page, tab_name):
+    """点击采购服务页面左侧导航中的子分类标签"""
+    try:
+        # 方法1: 通过text在div.left下查找
+        tab = page.locator(f"div.left >> text='{tab_name}'").first
+        if tab.count() > 0:
+            tab.click()
+            time.sleep(3)
+            return True
+    except:
+        pass
+    
+    try:
+        # 方法2: 用evaluate精确查找并点击
+        clicked = page.evaluate(f"""() => {{
+            const divs = document.querySelectorAll('div.left div, div.left span');
+            for (const d of divs) {{
+                if (d.innerText.trim() === '{tab_name}') {{
+                    d.click();
+                    return true;
+                }}
+            }}
+            return false;
+        }}""")
+        if clicked:
+            time.sleep(3)
+            return True
+    except:
+        pass
+    
+    return False
 
 def fetch_cmcc():
     print(f"=== 抓取移动招标 {datetime.now(BJT).strftime('%H:%M:%S')} ===")
     print(f"限定日期: {TODAY}")
     print(f"关键词: {' | '.join(KEYWORDS)}")
-    
+
     playwright = sync_playwright().start()
     browser = playwright.chromium.launch(headless=True)
     context = browser.new_context(viewport={"width": 1920, "height": 1080})
     page = context.new_page()
-    
-    results = []
-    
-    sections = [
-        ("https://b2b.10086.cn/#/biddingProcurementBulletin", "招标采购公告"),
-        ("https://b2b.10086.cn/#/procurementServices", "采购意见征求公告")
-    ]
-    
-    for url, name in sections:
-        section_results = fetch_section(page, context, url, name)
-        results.extend(section_results)
-    
+
+    all_results = []
+
+    # ========== 第一个网页：招标采购公告 ==========
+    print(f"\n{'='*60}")
+    print(f"开始抓取: 招标采购公告")
+    print(f"{'='*60}")
+    try:
+        page.goto("https://b2b.10086.cn/#/biddingProcurementBulletin", wait_until="load", timeout=90000)
+        time.sleep(5)
+        results = scrape_current_table(page, context, "招标采购公告")
+        all_results.extend(results)
+    except Exception as e:
+        print(f"  错误: {e}")
+
+    # ========== 第二个网页：采购服务（6个子分类） ==========
+    print(f"\n{'='*60}")
+    print(f"开始抓取: 采购服务 (共{len(PROCUREMENT_SERVICE_TABS)}个子分类)")
+    print(f"{'='*60}")
+
+    try:
+        page.goto("https://b2b.10086.cn/#/procurementServices", wait_until="load", timeout=90000)
+        time.sleep(5)
+
+        for tab_name in PROCUREMENT_SERVICE_TABS:
+            print(f"\n  --- 切换到子分类: {tab_name} ---")
+
+            if click_left_nav_tab(page, tab_name):
+                print(f"  ✓ 已切换到 [{tab_name}]")
+                time.sleep(2)
+
+                # 检查表格是否有数据
+                rows = page.locator(".cmcc-table-row").all()
+                if len(rows) == 0:
+                    print(f"  {tab_name}: 无数据，跳过")
+                    continue
+
+                # 快速检查第一行日期，如果不是今天就跳过
+                first_date = ""
+                try:
+                    first_cells = rows[0].locator("td").all()
+                    if len(first_cells) >= 4:
+                        first_date = first_cells[3].inner_text().strip()
+                except:
+                    pass
+
+                if first_date and first_date < TODAY:
+                    print(f"  {tab_name}: 最新记录日期 {first_date}，无今天数据，跳过")
+                    continue
+
+                results = scrape_current_table(page, context, tab_name)
+                all_results.extend(results)
+            else:
+                print(f"  ✗ 无法切换到 [{tab_name}]，跳过")
+
+    except Exception as e:
+        print(f"  采购服务错误: {e}")
+
     page.close()
     browser.close()
     playwright.stop()
-    
+
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    
+        json.dump(all_results, f, ensure_ascii=False, indent=2)
+
     print(f"\n{'='*60}")
-    print(f"✅ 全部完成: {len(results)} 条匹配关键词的记录")
-    for i, r in enumerate(results):
+    print(f"✅ 全部完成: {len(all_results)} 条匹配关键词的记录")
+    for i, r in enumerate(all_results):
         print(f"  [{i+1}] 【{r['province']}-{r['type']}】{r['title'][:40]}...")
         print(f"       URL: {r['url'][:80]}")
     print(f"{'='*60}")
-    
-    return len(results)
+
+    return len(all_results)
 
 if __name__ == "__main__":
     fetch_cmcc()
