@@ -164,6 +164,46 @@ def send_combined_message(cmcc_bids: List[Dict], unicom_bids: List[Dict], teleco
         return False
 
 
+def is_workday():
+    """判断今天是否是工作日（周一到周五）"""
+    return now_bjt().weekday() < 5  # 0=周一, 4=周五
+
+
+def send_alert(problems: list):
+    """工作日抓取异常时推送告警到飞书"""
+    now = now_bjt()
+    content_lines = [
+        [{"tag": "text", "text": f"⏰ {now.strftime('%Y-%m-%d %H:%M')} ({['周一','周二','周三','周四','周五'][now.weekday()]})"}],
+        [{"tag": "text", "text": ""}],
+    ]
+    for p in problems:
+        content_lines.append([{"tag": "text", "text": f"❌ {p}"}])
+    content_lines.append([{"tag": "text", "text": ""}])
+    content_lines.append([{"tag": "text", "text": "请检查对应抓取脚本或目标网站是否有变化。\n如连续多次告警，可能需要排查反爬或接口变更。"}])
+
+    payload = {
+        "msg_type": "post",
+        "content": {
+            "post": {
+                "zh_cn": {
+                    "title": f"⚠️ 商机抓取异常告警（{len(problems)}项）",
+                    "content": content_lines
+                }
+            }
+        }
+    }
+    try:
+        resp = requests.post(FEISHU_WEBHOOK, json=payload,
+                             headers={"Content-Type": "application/json"}, timeout=30)
+        result = resp.json()
+        if result.get("code") == 0:
+            print(f"⚠️ 告警已推送（{len(problems)}项问题）")
+        else:
+            print(f"⚠️ 告警推送失败: {result}")
+    except Exception as e:
+        print(f"⚠️ 告警推送异常: {e}")
+
+
 def main():
     print(f"=== 整合推送开始 {now_bjt().strftime('%Y-%m-%d %H:%M:%S')} ===")
     
@@ -172,6 +212,19 @@ def main():
     print(f"  移动: {len(cmcc_bids)} 条")
     print(f"  联通: {len(unicom_bids)} 条")
     print(f"  电信: {len(telecom_bids)} 条")
+    
+    # 工作日0条告警
+    if is_workday():
+        problems = []
+        if len(cmcc_bids) == 0:
+            problems.append("移动抓取0条 — 可能被反爬拦截或页面结构变化")
+        if len(unicom_bids) == 0:
+            problems.append("联通抓取0条 — 可能API接口变更或网站改版")
+        if len(telecom_bids) == 0:
+            problems.append("电信抓取0条 — 可能API接口变更或返回异常")
+        if problems:
+            print(f"\n⚠️ 工作日异常检测: {len(problems)}项")
+            send_alert(problems)
     
     send_combined_message(cmcc_bids, unicom_bids, telecom_bids)
     
