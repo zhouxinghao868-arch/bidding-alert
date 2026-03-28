@@ -213,18 +213,17 @@ def main():
     print(f"  联通: {len(unicom_bids)} 条")
     print(f"  电信: {len(telecom_bids)} 条")
     
-    # 工作日0条告警
-    if is_workday():
-        problems = []
-        if len(cmcc_bids) == 0:
-            problems.append("移动抓取0条 — 可能被反爬拦截或页面结构变化")
-        if len(unicom_bids) == 0:
-            problems.append("联通抓取0条 — 可能API接口变更或网站改版")
-        if len(telecom_bids) == 0:
-            problems.append("电信抓取0条 — 可能API接口变更或返回异常")
-        if problems:
-            print(f"\n⚠️ 工作日异常检测: {len(problems)}项")
-            send_alert(problems)
+    # 抓取0条告警（每天都检查）
+    problems = []
+    if len(cmcc_bids) == 0:
+        problems.append("移动抓取0条 — 可能被反爬拦截或页面结构变化")
+    if len(unicom_bids) == 0:
+        problems.append("联通抓取0条 — 可能API接口变更或网站改版")
+    if len(telecom_bids) == 0:
+        problems.append("电信抓取0条 — 可能API接口变更或返回异常")
+    if problems:
+        print(f"\n⚠️ 异常检测: {len(problems)}项")
+        send_alert(problems)
     
     send_combined_message(cmcc_bids, unicom_bids, telecom_bids)
     
