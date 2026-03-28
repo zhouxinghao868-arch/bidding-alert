@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "unicom_bids.json"
-KEYWORDS = []  # 不做关键词过滤，抓取所有当天记录
+KEYWORDS = ["数智化", "数据", "算力", "战略"]
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 

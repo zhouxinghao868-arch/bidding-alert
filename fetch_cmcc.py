@@ -32,7 +32,7 @@ def rand_sleep(lo=2, hi=5):
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "cmcc_bids.json"
-KEYWORDS = []  # 不做关键词过滤，抓取所有当天记录
+KEYWORDS = ["数智化", "数据", "算力", "战略"]
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 
