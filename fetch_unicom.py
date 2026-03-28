@@ -114,8 +114,8 @@ def fetch_unicom():
             if not any(kw in title for kw in KEYWORDS):
                 continue
             
-            # 构建详情URL
-            detail_url = f"https://www.chinaunicombidding.cn/bidDetail/{rid}"
+            # 构建详情URL（联通网站改版后新格式）
+            detail_url = f"https://www.chinaunicombidding.cn/bidInformation/detail?id={rid}"
             
             print(f"  [✓] {province} | {anno_type} | {title[:50]}...")
             
