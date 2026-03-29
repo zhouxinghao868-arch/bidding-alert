@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(line_buffering=True)
 
 OUTPUT_FILE = "telecom_bids.json"
-KEYWORDS = ["数智化", "数据", "算力", "战略", "算网", "软件开发"]
+KEYWORDS = ["数智化", "数据", "算力", "战略", "算网", "软件开发", "云智算", "DICT", "ICT", "业务支撑"]
 BJT = timezone(timedelta(hours=8))
 TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
 

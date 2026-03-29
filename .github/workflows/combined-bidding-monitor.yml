@@ -5,7 +5,7 @@ name: 运营商招标信息整合监控
 
 on:
   schedule:
-    - cron: '0 1-14 * * *'  # 北京时间 9-22点，每小时运行
+    - cron: '8 1-15 * * *'  # 北京时间 9:08-23:08，每小时第8分钟运行（避开整点高负载）
   workflow_dispatch:
 
 permissions:
