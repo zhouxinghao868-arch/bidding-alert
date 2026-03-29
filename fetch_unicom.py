@@ -5,6 +5,7 @@
 """
 
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -15,7 +16,7 @@ sys.stdout.reconfigure(line_buffering=True)
 OUTPUT_FILE = "unicom_bids.json"
 KEYWORDS = ["数智化", "数据", "算力", "战略", "算网", "软件开发", "云智算", "DICT", "ICT", "业务支撑"]
 BJT = timezone(timedelta(hours=8))
-TODAY = datetime.now(BJT).strftime("%Y-%m-%d")
+TODAY = os.environ.get("BIDDING_DATE") or datetime.now(BJT).strftime("%Y-%m-%d")
 
 def fetch_unicom():
     print(f"=== 抓取联通招标 {datetime.now(BJT).strftime('%H:%M:%S')} ===")

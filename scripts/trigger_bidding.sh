@@ -32,6 +32,12 @@ touch "$LOCKFILE"
 
 echo "$TIMESTAMP 开始本地抓取..." >> "$LOG"
 
+# 0点运行时用前一天日期（兜底前一天遗漏）
+if [ "$HOUR" -eq 0 ]; then
+    export BIDDING_DATE=$(date -v-1d '+%Y-%m-%d')
+    echo "$TIMESTAMP 🔄 0点兜底模式，抓取前一天: $BIDDING_DATE" >> "$LOG"
+fi
+
 # 1. 抓取移动
 python3 fetch_cmcc.py >> "$LOG" 2>&1
 CMCC_EXIT=$?
