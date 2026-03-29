@@ -97,7 +97,8 @@ def fetch_unicom():
         
         print(f"\n共获取 {len(all_records)} 条记录")
         
-        # 过滤匹配
+        # 统计今日数据 + 过滤匹配
+        today_count = 0
         for record in all_records:
             rid = str(record.get('id', ''))
             if rid in seen_ids:
@@ -113,6 +114,7 @@ def fetch_unicom():
             # 日期过滤
             if create_date and create_date != TODAY:
                 continue
+            today_count += 1
             
             # 关键词匹配
             if KEYWORDS and not any(kw in title for kw in KEYWORDS):
@@ -150,7 +152,7 @@ def fetch_unicom():
         json.dump({"errors": errors, "count": len(results)}, f, ensure_ascii=False)
     
     print(f"\n{'='*60}")
-    print(f"✅ 联通抓取完成: {len(results)} 条匹配关键词的记录")
+    print(f"✅ 联通抓取完成: 今日{today_count}条, {len(results)}条匹配关键词")
     for i, r in enumerate(results):
         print(f"  [{i+1}] 【{r['province']}-{r['type']}】{r['title'][:50]}...")
         print(f"       URL: {r['url']}")

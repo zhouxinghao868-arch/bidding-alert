@@ -89,6 +89,7 @@ def scrape_current_table(page, context, name):
             break
 
         page_has_today = False
+        today_count_on_page = 0
         matched_indices = []
         earliest_date_on_page = None
 
@@ -110,6 +111,7 @@ def scrape_current_table(page, context, name):
                 if date_str != TODAY:
                     continue
                 page_has_today = True
+                today_count_on_page += 1
 
                 if not KEYWORDS or any(kw in title for kw in KEYWORDS):
                     matched_indices.append((i, company, bid_type, title, date_str))
@@ -168,8 +170,8 @@ def scrape_current_table(page, context, name):
             print(f"    翻页异常: {e}")
             break
 
-    print(f"  {name} 完成: {len(results)} 条匹配 (翻了{page_num}页)")
-    return results
+    print(f"  {name} 完成: 今日{today_count_on_page}条, {len(results)}条匹配关键词 (翻了{page_num}页)")
+    return results, today_count_on_page
 
 def click_left_nav_tab(page, tab_name):
     """点击采购服务页面左侧导航中的子分类标签"""
@@ -216,6 +218,7 @@ def fetch_cmcc():
     page = context.new_page()
 
     all_results = []
+    total_today_count = 0
     errors = []
 
     # ========== 第一个网页：招标采购公告（5个子分类） ==========
@@ -251,8 +254,9 @@ def fetch_cmcc():
                     print(f"  {tab_name}: 最新记录日期 {first_date}，无今天数据，跳过")
                     continue
 
-                results = scrape_current_table(page, context, tab_name)
+                results, today_sub = scrape_current_table(page, context, tab_name)
                 all_results.extend(results)
+                total_today_count += today_sub
             else:
                 print(f"  ✗ 无法切换到 [{tab_name}]，跳过")
 
@@ -295,8 +299,9 @@ def fetch_cmcc():
                     print(f"  {tab_name}: 最新记录日期 {first_date}，无今天数据，跳过")
                     continue
 
-                results = scrape_current_table(page, context, tab_name)
+                results, today_sub = scrape_current_table(page, context, tab_name)
                 all_results.extend(results)
+                total_today_count += today_sub
             else:
                 print(f"  ✗ 无法切换到 [{tab_name}]，跳过")
 
@@ -316,7 +321,7 @@ def fetch_cmcc():
         json.dump({"errors": errors, "count": len(all_results)}, f, ensure_ascii=False)
 
     print(f"\n{'='*60}")
-    print(f"✅ 全部完成: {len(all_results)} 条匹配关键词的记录")
+    print(f"✅ 全部完成: 今日{total_today_count}条, {len(all_results)}条匹配关键词")
     for i, r in enumerate(all_results):
         print(f"  [{i+1}] 【{r['province']}-{r['type']}】{r['title'][:40]}...")
         print(f"       URL: {r['url'][:80]}")
