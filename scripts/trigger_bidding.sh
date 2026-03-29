@@ -8,9 +8,9 @@ WORKDIR="/Users/zhouxinghao/.openclaw/workspace"
 LOG="$WORKDIR/scripts/bidding_cron.log"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-# 时间范围控制：仅9-23点运行
+# 时间范围控制：9点-次日0点运行（即9:08-0:08，共16轮）
 HOUR=$(date '+%H')
-if [ "$HOUR" -lt 9 ] || [ "$HOUR" -gt 23 ]; then
+if [ "$HOUR" -ge 1 ] && [ "$HOUR" -lt 9 ]; then
     exit 0
 fi
 
