@@ -4,8 +4,8 @@ name: 运营商招标信息整合监控
 # 关键词: 数智化、数智、数据、算力、战略
 
 on:
-  schedule:
-    - cron: '8 1-15 * * *'  # 北京时间 9:08-23:08，每小时第8分钟运行（避开整点高负载）
+  # schedule已迁移到本地cron触发（Mac mini crontab）
+  # 原: cron: '8 1-15 * * *'
   workflow_dispatch:
 
 permissions:
