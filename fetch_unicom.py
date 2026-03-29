@@ -52,24 +52,38 @@ def fetch_unicom():
         page.goto("https://www.chinaunicombidding.cn/bidInformation", wait_until="load", timeout=60000)
         time.sleep(8)
         
-        # 获取首页API数据
+        # 点击"今天"按钮筛选，只获取今天发布的数据
+        print("点击「今天」筛选按钮...")
+        api_data.clear()
+        try:
+            today_btn = page.locator("text=今 天").first
+            if today_btn.count() == 0:
+                today_btn = page.locator("text=今天").first
+            today_btn.click()
+            time.sleep(5)
+            print("✓ 已筛选「今天」")
+        except Exception as e:
+            print(f"⚠️ 点击「今天」失败: {e}，回退到全量模式")
+        
+        # 获取筛选后的首页API数据
         if api_data:
             data = api_data[-1]
             total = data.get('total', 0)
             pages = data.get('pages', 0)
-            print(f"总记录: {total}, 总页数: {pages}")
+            print(f"今日记录: {total}, 总页数: {pages}")
             
             records = data.get('records', [])
             all_records.extend(records)
             print(f"第1页: {len(records)} 条")
+        else:
+            print("今日无数据（API未返回记录）")
         
-        # 翻页获取更多（最多翻10页）
-        max_pages = min(10, api_data[-1].get('pages', 1)) if api_data else 1
+        # 翻页获取更多（筛选后数据量通常不大，最多翻20页）
+        total_pages = min(20, api_data[-1].get('pages', 1)) if api_data else 0
         
-        for p in range(2, max_pages + 1):
+        for p in range(2, total_pages + 1):
             api_data.clear()
             
-            # 点击下一页
             try:
                 next_btn = page.locator(f".ant-pagination-item[title='{p}']").first
                 if next_btn.count() > 0:
@@ -80,19 +94,12 @@ def fetch_unicom():
                         records = api_data[-1].get('records', [])
                         all_records.extend(records)
                         print(f"第{p}页: {len(records)} 条")
-                    
-                    # 检查是否还有今天的记录
-                    if records:
-                        last_date = records[-1].get('createDate', '')[:10]
-                        if last_date and last_date < TODAY:
-                            print(f"  最后记录日期 {last_date} 早于今天，停止翻页")
-                            break
                 else:
                     break
             except:
                 break
         
-        print(f"\n共获取 {len(all_records)} 条记录")
+        print(f"\n共获取 {len(all_records)} 条今日记录")
         
         # 过滤匹配
         for record in all_records:
