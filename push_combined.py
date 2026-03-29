@@ -173,7 +173,7 @@ def send_alert(problems: list):
     """工作日抓取异常时推送告警到飞书"""
     now = now_bjt()
     content_lines = [
-        [{"tag": "text", "text": f"⏰ {now.strftime('%Y-%m-%d %H:%M')} ({['周一','周二','周三','周四','周五'][now.weekday()]})"}],
+        [{"tag": "text", "text": f"⏰ {now.strftime('%Y-%m-%d %H:%M')} ({['周一','周二','周三','周四','周五','周六','周日'][now.weekday()]})"}],
         [{"tag": "text", "text": ""}],
     ]
     for p in problems:

@@ -85,7 +85,7 @@ def fetch_telecom():
         try:
             # 打开搜索页面（触发第1页API请求）
             print("\n打开搜索页面...")
-            page.goto(SEARCH_URL, wait_until="load", timeout=90000)
+            page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=90000)
             time.sleep(8)
             print(f"  首页加载完成, 已拦截 {len(api_data)} 条")
 
