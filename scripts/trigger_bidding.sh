@@ -1,12 +1,12 @@
 #!/bin/bash
-# 商机抓取定时触发脚本
-# launchd每小时第8分钟触发 → GitHub Actions执行抓取
+# 商机抓取本地运行脚本
+# launchd每小时触发 → 本地直接执行抓取+推送
 # 运行时段: 9:00-23:00（北京时间）
-# 日志: ~/.openclaw/workspace/scripts/bidding_cron.log
 
-export PATH="/opt/homebrew/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 WORKDIR="/Users/zhouxinghao/.openclaw/workspace"
 LOG="$WORKDIR/scripts/bidding_cron.log"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # 时间范围控制：仅9-23点运行
 HOUR=$(date '+%H')
@@ -14,16 +14,34 @@ if [ "$HOUR" -lt 9 ] || [ "$HOUR" -gt 23 ]; then
     exit 0
 fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') 触发商机抓取..." >> "$LOG"
+cd "$WORKDIR" || { echo "$TIMESTAMP ❌ 工作目录不存在" >> "$LOG"; exit 1; }
 
-cd "$WORKDIR" || { echo "$(date) 工作目录不存在" >> "$LOG"; exit 1; }
+echo "$TIMESTAMP 开始本地抓取..." >> "$LOG"
 
-OUTPUT=$(gh workflow run combined-bidding-monitor.yml 2>&1)
-if [ $? -eq 0 ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') ✅ 触发成功: $OUTPUT" >> "$LOG"
-else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') ❌ 触发失败: $OUTPUT" >> "$LOG"
-fi
+# 1. 抓取移动
+python3 fetch_cmcc.py >> "$LOG" 2>&1
+CMCC_EXIT=$?
 
-# 日志保留最近500行
-tail -500 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+# 2. 抓取联通
+python3 fetch_unicom.py >> "$LOG" 2>&1
+UNICOM_EXIT=$?
+
+# 3. 抓取电信
+python3 fetch_telecom.py >> "$LOG" 2>&1
+TELECOM_EXIT=$?
+
+# 4. 整合推送到飞书
+python3 push_combined.py >> "$LOG" 2>&1
+PUSH_EXIT=$?
+
+# 5. 保存去重记录到git
+git add pushed_bids_combined.json 2>/dev/null
+git diff --staged --quiet || git commit -m "更新去重记录 $(date +'%Y-%m-%d %H:%M')" 2>/dev/null
+git push 2>/dev/null || true
+
+TIMESTAMP_END=$(date '+%Y-%m-%d %H:%M:%S')
+echo "$TIMESTAMP_END 本地抓取完成 (移动:$CMCC_EXIT 联通:$UNICOM_EXIT 电信:$TELECOM_EXIT 推送:$PUSH_EXIT)" >> "$LOG"
+echo "---" >> "$LOG"
+
+# 日志保留最近1000行
+tail -1000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

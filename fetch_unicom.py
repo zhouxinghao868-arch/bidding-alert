@@ -52,36 +52,22 @@ def fetch_unicom():
         page.goto("https://www.chinaunicombidding.cn/bidInformation", wait_until="load", timeout=60000)
         time.sleep(8)
         
-        # 点击"今天"按钮筛选，只获取今天发布的数据
-        print("点击「今天」筛选按钮...")
-        api_data.clear()
-        try:
-            today_btn = page.locator("text=今 天").first
-            if today_btn.count() == 0:
-                today_btn = page.locator("text=今天").first
-            today_btn.click()
-            time.sleep(5)
-            print("✓ 已筛选「今天」")
-        except Exception as e:
-            print(f"⚠️ 点击「今天」失败: {e}，回退到全量模式")
-        
-        # 获取筛选后的首页API数据
+        # 获取首页API数据
         if api_data:
             data = api_data[-1]
             total = data.get('total', 0)
             pages = data.get('pages', 0)
-            print(f"今日记录: {total}, 总页数: {pages}")
+            print(f"总记录: {total}, 总页数: {pages}")
             
             records = data.get('records', [])
             all_records.extend(records)
             print(f"第1页: {len(records)} 条")
-        else:
-            print("今日无数据（API未返回记录）")
         
-        # 翻页获取更多（筛选后数据量通常不大，最多翻20页）
-        total_pages = min(20, api_data[-1].get('pages', 1)) if api_data else 0
+        # 翻页获取更多（最多翻10页，连续2页无今日数据则停止）
+        max_pages = min(10, api_data[-1].get('pages', 1)) if api_data else 1
+        no_today_streak = 0
         
-        for p in range(2, total_pages + 1):
+        for p in range(2, max_pages + 1):
             api_data.clear()
             
             try:
@@ -94,12 +80,22 @@ def fetch_unicom():
                         records = api_data[-1].get('records', [])
                         all_records.extend(records)
                         print(f"第{p}页: {len(records)} 条")
+                        
+                        # 检查本页是否有今天的记录
+                        has_today = any(r.get('createDate', '')[:10] == TODAY for r in records)
+                        if has_today:
+                            no_today_streak = 0
+                        else:
+                            no_today_streak += 1
+                            if no_today_streak >= 2:
+                                print(f"  连续{no_today_streak}页无今日数据，停止翻页")
+                                break
                 else:
                     break
             except:
                 break
         
-        print(f"\n共获取 {len(all_records)} 条今日记录")
+        print(f"\n共获取 {len(all_records)} 条记录")
         
         # 过滤匹配
         for record in all_records:
