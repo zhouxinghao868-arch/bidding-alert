@@ -16,6 +16,20 @@ fi
 
 cd "$WORKDIR" || { echo "$TIMESTAMP ❌ 工作目录不存在" >> "$LOG"; exit 1; }
 
+# 并发锁：防止上一轮未结束时重复运行
+LOCKFILE="$WORKDIR/scripts/.bidding.lock"
+if [ -f "$LOCKFILE" ]; then
+    LOCK_AGE=$(( $(date +%s) - $(stat -f%m "$LOCKFILE") ))
+    if [ "$LOCK_AGE" -lt 3600 ]; then
+        echo "$TIMESTAMP ⏳ 上一轮仍在运行（${LOCK_AGE}秒前），跳过" >> "$LOG"
+        exit 0
+    else
+        echo "$TIMESTAMP ⚠️ 锁文件超过1小时，强制清除" >> "$LOG"
+    fi
+fi
+trap "rm -f $LOCKFILE" EXIT
+touch "$LOCKFILE"
+
 echo "$TIMESTAMP 开始本地抓取..." >> "$LOG"
 
 # 1. 抓取移动
